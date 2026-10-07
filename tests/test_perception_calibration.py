@@ -1,3 +1,5 @@
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -99,20 +101,26 @@ class Calibration(unittest.TestCase):
             shots = {"normal": make_frame(0, hp=.8), "cooldown": make_frame(0, hp=.8, cooldown=tuple(REGIONS["regions"]["slots"])),
                      "no_target": make_frame(0, hp=.8, target="none"), "dialog": make_frame(0, state="dialog")}
             args = ["calibrate", "--regions", os.path.join(d, "r.json"), "--out", os.path.join(d, "p.json")]
-            json.dump(REGIONS, open(args[2], "w"))
+            with open(args[2], "w") as f:
+                json.dump(REGIONS, f)
             for k, f in shots.items():
                 write_png(os.path.join(d, k + ".png"), f)
                 args += ["--shot", f"{k}={os.path.join(d, k + '.png')}"]
-            self.assertEqual(cli.main(args), 0)
-            self.assertEqual(cli.main(["read", "--profile", args[4], os.path.join(d, "normal.png")]), 0)
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                self.assertEqual(cli.main(args), 0)
+                self.assertEqual(cli.main(["read", "--profile", args[4], os.path.join(d, "normal.png")]), 0)
+            self.assertIn('"hp"', out.getvalue())
             # a wrong-size screenshot is refused by the CLI
             write_png(os.path.join(d, "small.png"), Frame(160, 90, [bytes(480)] * 90, 0.0))
             bad = args[:-2] + ["--shot", f"dialog={os.path.join(d, 'small.png')}"]
-            self.assertEqual(cli.main(bad), 2)
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(cli.main(bad), 2)
 
     def test_cli_check_config_rejects_placeholders(self):
         root = os.path.dirname(os.path.dirname(__file__))
-        self.assertEqual(cli.main(["check-config", "--config", os.path.join(root, "config.example.json")]), 2)
+        with contextlib.redirect_stderr(io.StringIO()) as err:
+            self.assertEqual(cli.main(["check-config", "--config", os.path.join(root, "config.example.json")]), 2)
+        self.assertIn("placeholder", err.getvalue())
 
 
 if __name__ == "__main__":
