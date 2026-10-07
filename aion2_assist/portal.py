@@ -72,6 +72,9 @@ class DBusTransport(ABC):
     def is_closed(self, session_path) -> bool:
         """True once Session.Closed was seen for this session."""
 
+    def close(self) -> None:
+        """Drop the connection (this also ends every portal session created on it)."""
+
 
 class FakeTransport(DBusTransport):
     """Records every call; replies come from `replies[method]` (value or callable(args))."""
@@ -87,19 +90,19 @@ class FakeTransport(DBusTransport):
         self.supports_receive = supports_receive
         self._tok = itertools.count(1)
 
-    def _reply(self, method, args):
-        r = self.replies.get(method, {})
+    def _reply(self, method, args, iface=None):
+        r = self.replies.get((iface, method), self.replies.get(method, {}))
         return r(args) if callable(r) else r
 
     def call(self, dest, path, iface, method, signature, args):
         self.calls.append(dict(dest=dest, path=path, iface=iface, method=method, signature=signature, args=args))
-        return self._reply(method, args)
+        return self._reply(method, args, iface)
 
     def request(self, dest, path, iface, method, signature, args, options):
         options = {"handle_token": f"t{next(self._tok)}", **options}
         self.calls.append(dict(dest=dest, path=path, iface=iface, method=method, signature=signature,
                                args=args, options=options))
-        r = self._reply(method, args)
+        r = self._reply(method, args, iface)
         if isinstance(r, PortalDenied):
             raise r
         return r
@@ -122,6 +125,9 @@ class FakeTransport(DBusTransport):
     def is_closed(self, session_path):
         return session_path in self.closed
 
+    def close(self):
+        self.transport_closed = True
+
     def methods(self):
         return [c["method"] for c in self.calls]
 
@@ -132,6 +138,9 @@ class PipeWireReader(ABC):
     @abstractmethod
     def read(self, node_id: int, fd, size) -> Frame:
         ...
+
+    def close(self) -> None:
+        """Stop any helper process."""
 
 
 class PortalScreenCastSource(FrameSource):
@@ -302,6 +311,11 @@ class GlobalShortcutsOwnerInput(OwnerInput):
         bound = {sc[0] for sc in res.get("shortcuts", [])}
         if bound != {sid for sid, _ in self.SHORTCUTS}:
             raise PortalDenied(f"not all shortcuts bound: {sorted(bound)}")
+
+    def close(self):
+        if self.session:
+            s, self.session = self.session, None
+            self.t.call(PORTAL, s, SESSION_IFACE, "Close", "", [])
 
     def poll(self):
         if self.session is None or self.t.is_closed(self.session):

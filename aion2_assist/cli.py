@@ -122,6 +122,27 @@ def cmd_dry_run(a):
     return 0
 
 
+def cmd_run(a):
+    from .orchestrator import live_main
+    return live_main(a)
+
+
+def cmd_approve(a):
+    """Owner action: write the profile hash into the gates file (mode 0600). Never run by the assist itself."""
+    from .gates import DEFAULT_GATES_FILE
+    if not a.i_accept_live_risk:
+        print("approve refused: pass --i-accept-live-risk", file=sys.stderr)
+        return 2
+    prof = load_profile(a.profile)
+    path = os.path.expanduser(a.gates_file)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(f"# owner approval for live trial of profile\n{prof.hash}\n")
+    print(f"approved profile {prof.hash[:12]}... in {path}")
+    return 0
+
+
 def cmd_binds(a):
     from .binds import make_template, validate_binds
     if a.action == "template":
@@ -155,6 +176,25 @@ def main(argv=None):
     k = sub.add_parser("check-config", help="validate a config (rejects placeholder keys)")
     k.add_argument("--config", required=True)
     k.set_defaults(fn=cmd_check_config)
+    from .gates import DEFAULT_GATES_FILE
+    run = sub.add_parser("run", help="LIVE session (default-refusing: lists every missing gate and exits 2)",
+                         description="Starts the live assist only if ALL gates pass: --i-accept-live-risk, valid config "
+                                     "(no UNSET keys), profile whose hash is pinned in the config, explicit window_match, "
+                                     "ignore_codes, gates file containing the profile hash, and the startup self-check. "
+                                     "The controller then stays OFF until the toggle hotkey.")
+    run.add_argument("--config")
+    run.add_argument("--profile")
+    run.add_argument("--i-accept-live-risk", action="store_true",
+                     help="acknowledge the NC Integrated Account Ban risk")
+    run.add_argument("--gates-file", default=DEFAULT_GATES_FILE, help="owner approval file (default: %(default)s)")
+    run.add_argument("--tick-ms", type=float, default=50.0)
+    run.add_argument("--self-check-s", type=float, default=1.0)
+    run.set_defaults(fn=cmd_run)
+    ap_ = sub.add_parser("approve", help="OWNER ONLY: write the profile hash into the gates file")
+    ap_.add_argument("--profile", required=True)
+    ap_.add_argument("--i-accept-live-risk", action="store_true")
+    ap_.add_argument("--gates-file", default=DEFAULT_GATES_FILE)
+    ap_.set_defaults(fn=cmd_approve)
     b = sub.add_parser("binds", help="write a blank binds template / validate a filled-in file")
     b.add_argument("action", choices=("template", "validate"))
     b.add_argument("file")

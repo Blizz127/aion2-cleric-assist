@@ -55,6 +55,9 @@ class Config:
     desync_n: int = 3
     response_ms: float = 1500.0     # extra wait (after cast) for the slot to show cooldown
     profile_hash: Optional[str] = None  # pin: refuse to run with any other profile
+    ignore_codes: tuple = ()            # evdev codes of the assist's own hotkeys (not manual input)
+    hotkey_triggers: Dict[str, str] = field(default_factory=dict)  # optional preferred triggers: toggle/emergency/hold
+    explicit_keys: frozenset = frozenset()  # keys the config file set explicitly (live gates need some of them)
 
     @staticmethod
     def from_dict(d: dict) -> "Config":
@@ -74,6 +77,8 @@ class Config:
             if min(slot.cooldown, slot.cast, slot.gcd, slot.mp_cost, slot.duration) < 0:
                 raise ConfigError(f"slot {sid}: negative timing/cost")
             slots[sid] = slot
+        d["ignore_codes"] = tuple(d.get("ignore_codes", ()))
+        d["explicit_keys"] = frozenset(d.keys()) - {"explicit_keys"}
         try:
             cfg = Config(slots=slots, **d)
         except TypeError as e:
@@ -90,6 +95,8 @@ class Config:
             raise ConfigError("max_keys_per_sec/max_stale_ms must be > 0, desync_n >= 1")
         if not 0 < self.min_confidence <= 1:
             raise ConfigError("min_confidence in (0,1]")
+        if not all(isinstance(c, int) and not isinstance(c, bool) and 1 <= c < 768 for c in self.ignore_codes):
+            raise ConfigError("ignore_codes must be evdev key/button codes (integers 1..767)")
         keys = [s.key for s in self.enabled_slots()]
         if len(keys) != len(set(keys)):
             raise ConfigError("duplicate keys among enabled slots")

@@ -132,6 +132,31 @@ KWin) never appear on a `/dev/input` node. `startup_self_check` sends nothing, c
 assist emitted no key during an idle window, and reports (without blaming the assist) any owner input seen; it returns
 `live_verified=False` always. If the assumption is wrong the assist would pause itself (the fail-safe direction).
 
+## Live run (`run`) - source complete, default-refusing
+`orchestrator.py` wires the REAL adapters: JeepneyTransport (session bus) -> KWin focus receiver -> evdev monitor (must be
+LIVE) -> GlobalShortcuts -> ScreenCast + GStreamerPipeWireReader -> RemoteDesktop keyboard sink -> Controller (starts OFF)
+-> startup self-check (sends nothing). Teardown (try/finally + SIGTERM/SIGINT/SIGHUP handlers, idempotent, never raises)
+releases every key FIRST, then closes the RemoteDesktop/ScreenCast/GlobalShortcuts sessions, the gst process, the monitor
+and the bus. A loop watchdog thread stops the run if the main loop stalls; if it is wedged (e.g. blocked in a bus call) it
+ends the process, which drops the bus connection and with it every portal session. Any portal session closing mid-run
+stops everything (`portal_session_closed:<which>`).
+`python3 -m aion2_assist run --config C --profile P --i-accept-live-risk [--gates-file F]` starts ONLY if all hold, else it
+prints each missing gate and exits 2 (startup failure after the gates: exit 3):
+1. `--i-accept-live-risk`; 2. config valid for run (real key names, no UNSET); 3. profile loads with a matching internal
+hash AND the config's `profile_hash` pins that hash; 4. explicit non-empty `window_match`; 5. explicit non-empty
+`ignore_codes`; 6. gates file (default `~/.config/aion2-assist/LIVE-APPROVED`: owned by you, not group/world-writable,
+contains the profile hash; the owner writes it, or runs `approve --profile P --i-accept-live-risk`); 7. the startup
+self-check passes (live read-only monitor, assist sent nothing).
+Even after start the controller stays OFF until the toggle hotkey (hold mode also needs the hold hotkey held).
+
+## KWin 6.7.5 recheck (read-only source fetch of the `v6.7.5` tag URLs, all resolved with no 404)
+`scripting.h`: interface `org.kde.kwin.Scripting`, `Q_SCRIPTABLE bool isScriptLoaded(const QString &pluginName) const`,
+`loadScript`, `unloadScript`; `scripting.cpp`: registered at `/Scripting`, scripts keyed by KPlugin Id, loaded from
+`contents/code/main.js` for `X-Plasma-API` `javascript`, enable key `<Id>Enabled` in `[Plugins]`, `callDBus` exposed to
+scripts; `workspace_wrapper.h`: `Q_PROPERTY(KWin::Window *activeWindow ... NOTIFY windowActivated)`, signal
+`windowActivated(KWin::Window *)`, no `activeClient`; `window.h`: read-only `resourceClass`, `caption`, `desktopFileName`.
+All match the package. (The fetch tool cannot echo a tag/commit id, so "tag v6.7.5" is established only by the URL resolving.)
+
 ## Offline CLI modes (mock sink; nothing is ever sent anywhere)
 ```
 python3 -m aion2_assist replay --demo                       # bundled synthetic timeline, zero owner inputs
