@@ -1,6 +1,8 @@
 """CLI (offline tools only). There is deliberately no `run` command: live use is not wired up."""
 import argparse
+import dataclasses
 import json
+import os
 import sys
 
 from .config import ConfigError, load_config
@@ -46,6 +48,80 @@ def cmd_check_config(a):
     return 0
 
 
+def _print_run(sink, recs, as_json):
+    for r in recs:
+        if as_json:
+            print(json.dumps(r, sort_keys=True))
+            continue
+        extra = f" action={r['action']} key={r['key']}" if r.get("action") else ""
+        extra += f" {r['detail']}" if r.get("detail") else ""
+        print(f"t={r['t']:<5} {r['event']:<8} reason={r['reason']}{extra}")
+    print("--- summary (MOCK adapters: nothing was sent to any real input device)")
+    from collections import Counter
+    sup = Counter(r["reason"] for r in recs if r["event"] == "suppress")
+    print(f"ticks={len(recs)} keys_emitted={len(sink.events)} suppressions={dict(sorted(sup.items()))}")
+    print("key sequence:", [(t, k) for t, k in sink.events])
+    return 0
+
+
+def _demo_inputs():
+    from .replay import DEMO_DIR
+    from .synth import synthetic_profile
+    return load_config(os.path.join(DEMO_DIR, "config.json")), synthetic_profile(), DEMO_DIR
+
+
+def cmd_replay(a):
+    from .replay import load_timeline, replay, run_frames, frames_dir_steps
+    if a.demo:
+        cfg, prof, d = _demo_inputs()
+        src = os.path.join(d, "timeline.json")
+        print("replay: bundled synthetic demo (synthetic profile + demo config; no owner inputs)")
+    else:
+        if not (a.source and a.config and a.profile):
+            print("replay needs <timeline.json|frames dir> --config --profile (or --demo)", file=sys.stderr)
+            return 2
+        cfg, prof, src = load_config(a.config), load_profile(a.profile), a.source
+    if os.path.isdir(src):
+        _, steps = frames_dir_steps(src, load_frame)
+        cfg = dataclasses.replace(cfg, watchdog_ms=max(cfg.watchdog_ms, a.dt * 2000))
+        sink, recs = run_frames(cfg, prof, steps, a.dt)
+    else:
+        steps, dt, hold = load_timeline(src)
+        sink, recs = replay(cfg, prof, steps, dt, hold)
+    return _print_run(sink, recs, a.json)
+
+
+def cmd_dry_run(a):
+    from .replay import frames_dir_steps, run_frames
+    import tempfile
+    from .png import write_png
+    from .synth import make_frame
+    if a.demo:
+        cfg, prof, _ = _demo_inputs()
+        tmp = tempfile.TemporaryDirectory()
+        for i, kw in enumerate((dict(), dict(hp=0.3), dict(state="dialog"), dict(anchor=False), dict(target="none"))):
+            write_png(os.path.join(tmp.name, f"frame{i:02d}.png"), make_frame(0.0, **kw))
+        directory = tmp.name
+        print("dry-run: demo screenshots (synthetic PNGs: normal, hp 0.30, dialog, HUD anchor missing, no target)")
+    else:
+        if not (a.frames and a.config and a.profile):
+            print("dry-run needs --frames DIR --config --profile (or --demo)", file=sys.stderr)
+            return 2
+        cfg, prof, directory = load_config(a.config), load_profile(a.profile), a.frames
+    names, steps = frames_dir_steps(directory, load_frame)
+    dt = 1.1 if a.demo else a.dt  # demo: spaced past the 1.0 s GCD so each frame can act
+    cfg = dataclasses.replace(cfg, watchdog_ms=max(cfg.watchdog_ms, dt * 2000))  # fake clock: no real stalls
+    sink, recs = run_frames(cfg, prof, steps, dt)
+    print(f"fake clock dt={dt}s per frame; frames toggle the (mock) owner on at the first frame, hold key held")
+    for n, r in zip(names, recs):
+        print(f"[{n}]", end=" ")
+        print(f"t={r['t']:<5} {r['event']:<8} reason={r['reason']}"
+              + (f" action={r['action']} key={r['key']}" if r.get("action") else ""))
+    print("--- summary (MOCK adapters: nothing was sent to any real input device)")
+    print(f"frames={len(recs)} keys_emitted={len(sink.events)} key sequence: {[(t, k) for t, k in sink.events]}")
+    return 0
+
+
 def cmd_binds(a):
     from .binds import make_template, validate_binds
     if a.action == "template":
@@ -84,6 +160,21 @@ def main(argv=None):
     b.add_argument("file")
     b.add_argument("--profile", help="required for template; optional for validate (checks slot ids)")
     b.set_defaults(fn=cmd_binds)
+    r = sub.add_parser("replay", help="run the full controller over a timeline JSON or PNG frames dir (mock sink)")
+    r.add_argument("source", nargs="?")
+    r.add_argument("--config")
+    r.add_argument("--profile")
+    r.add_argument("--dt", type=float, default=0.1, help="fake-clock seconds per frame (frames dir)")
+    r.add_argument("--demo", action="store_true", help="bundled synthetic timeline, zero owner inputs")
+    r.add_argument("--json", action="store_true", help="print structured log records")
+    r.set_defaults(fn=cmd_replay)
+    d = sub.add_parser("dry-run", help="controller over a folder of owner screenshots, fake clock, mock sink")
+    d.add_argument("--frames")
+    d.add_argument("--config")
+    d.add_argument("--profile")
+    d.add_argument("--dt", type=float, default=0.1)
+    d.add_argument("--demo", action="store_true")
+    d.set_defaults(fn=cmd_dry_run)
     a = ap.parse_args(argv)
     if a.cmd == "binds" and a.action == "template" and not a.profile:
         ap.error("binds template needs --profile")

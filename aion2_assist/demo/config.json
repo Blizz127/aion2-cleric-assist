@@ -1,0 +1,51 @@
+{
+ "_comment": "DEMO ONLY: synthetic profile slot ids; keys are generic real key names, NOT the owner's binds.",
+ "window_match": "AION2",
+ "hp_max": 318,
+ "mp_max": 1605,
+ "slots": {
+  "s1": {
+   "key": "1",
+   "role": "heal",
+   "cooldown": 5,
+   "gcd": 1.0,
+   "mp_cost": 100,
+   "priority": 10
+  },
+  "s2": {
+   "key": "2",
+   "role": "hot",
+   "cooldown": 6,
+   "gcd": 1.0,
+   "mp_cost": 50,
+   "priority": 20,
+   "duration": 12
+  },
+  "s3": {
+   "key": "3",
+   "role": "shield",
+   "cooldown": 15,
+   "gcd": 1.0,
+   "mp_cost": 50,
+   "priority": 30,
+   "duration": 8
+  },
+  "s4": {
+   "key": "4",
+   "role": "dmg",
+   "cooldown": 2,
+   "gcd": 1.0,
+   "mp_cost": 40,
+   "priority": 40
+  },
+  "s5": {
+   "key": "5",
+   "role": "dmg",
+   "cooldown": 2,
+   "gcd": 1.0,
+   "mp_cost": 40,
+   "priority": 1,
+   "enabled": false
+  }
+ }
+}

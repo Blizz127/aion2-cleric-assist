@@ -4,7 +4,8 @@ Owner-authorised (reading own input devices, which blizz can already do via the 
 change). Guarantees, enforced by tests:
   * event nodes are opened O_RDONLY|O_NONBLOCK|O_CLOEXEC only; nothing is ever written to them;
   * no exclusive grab and no virtual input device is created (this module makes no device-control calls at all);
-  * privacy: only a COUNT of key/button events is kept. Key codes and names are discarded immediately.
+  * privacy: only an activity BOOLEAN and the timestamp of the last activity are kept. No counters, key codes,
+    names or raw event bytes are retained (the kernel returns whole events per read, so no partial buffer either).
 
 Assumption (LIVE-VERIFICATION GATE): the assist's own keys are injected through the RemoteDesktop portal/libei
 into KWin, not through a /dev/input node, so they do not show up here. Offline this cannot be verified.
@@ -28,11 +29,9 @@ EVENT = struct.Struct("llHHi")  # struct input_event on 64-bit Linux: timeval(2*
 OPEN_FLAGS = os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC
 
 
-def parse_events(buf: bytes) -> Tuple[List[Tuple[int, int, int]], bytes]:
-    """-> ([(type, code, value)...], leftover partial bytes)."""
-    n = len(buf) // EVENT.size
-    out = [EVENT.unpack_from(buf, i * EVENT.size)[2:] for i in range(n)]
-    return out, buf[n * EVENT.size:]
+def parse_events(buf: bytes) -> List[Tuple[int, int, int]]:
+    """-> [(type, code, value)...]; a trailing partial event (never produced by the kernel) is dropped."""
+    return [EVENT.unpack_from(buf, i * EVENT.size)[2:] for i in range(len(buf) // EVENT.size)]
 
 
 def parse_caps(text: str) -> int:
@@ -96,7 +95,7 @@ class Status:
 
 class _Open:
     def __init__(self, info, fd):
-        self.info, self.fd, self.carry = info, fd, b""
+        self.info, self.fd = info, fd
 
 
 class ManualInputMonitor:
@@ -110,7 +109,8 @@ class ManualInputMonitor:
         self.devices: Dict[str, _Open] = {}
         self.sel = selectors.DefaultSelector()
         self._lock = threading.Lock()
-        self._count = 0
+        self._active = False
+        self.last_activity: Optional[float] = None  # clock time of the most recent manual input
         self.heartbeat: Optional[float] = None
         self.last_scan: Optional[float] = None
         self.error: Optional[BaseException] = None
@@ -123,7 +123,7 @@ class ManualInputMonitor:
         if self.last_scan is None or now - self.last_scan >= self.rescan_s:
             self._rescan()
             self.last_scan = now
-        n = 0
+        active = False
         for key, _ in self.sel.select(timeout) if self.devices else ():
             dev: _Open = key.data
             try:
@@ -136,11 +136,12 @@ class ManualInputMonitor:
             if not data:         # EOF
                 self._drop(dev.info.path)
                 continue
-            evs, dev.carry = parse_events(dev.carry + data)
-            n += sum(1 for t, c, v in evs if t == EV_KEY and counts_as_manual(c) and c not in self.ignore)
-        if n:
+            if any(t == EV_KEY and counts_as_manual(c) and c not in self.ignore for t, c, v in parse_events(data)):
+                active = True  # nothing about the event is kept
+            del data
+        if active:
             with self._lock:
-                self._count += n
+                self._active, self.last_activity = True, now
         self.heartbeat = now
 
     def _rescan(self):
@@ -171,11 +172,11 @@ class ManualInputMonitor:
                 pass
 
     # -- public ------------------------------------------------------------------
-    def take_activity(self) -> int:
-        """Number of manual key/button events since the last call."""
+    def take_activity(self) -> bool:
+        """True if any manual key/button input happened since the last call (then cleared)."""
         with self._lock:
-            n, self._count = self._count, 0
-        return n
+            a, self._active = self._active, False
+        return a
 
     def status(self) -> Status:
         if self.thread is None and self.heartbeat is None:
@@ -225,7 +226,7 @@ class MonitoredOwnerInput(OwnerInput):
 @dataclass
 class SelfCheckResult:
     ok: bool
-    events_seen: int
+    activity_seen: bool
     sent_by_assist: int
     live_verified: bool  # always False offline: injected-key invisibility needs the live trial
     note: str

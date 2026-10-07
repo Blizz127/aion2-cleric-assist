@@ -102,10 +102,13 @@ not a D-Bus method. Now: the owner installs the package in `kwin_script/aion2ass
 `qdbus org.kde.KWin /KWin reconfigure`). The script uses only documented API (`workspace.windowActivated`,
 `workspace.activeWindow`, `Window.resourceClass/desktopFileName/caption`, `callDBus`) and pushes
 `class|desktopFile|caption` to our bus name `org.aion2assist.focus` (`/focus`, `org.aion2assist.Focus.Report`).
-`KWinFocusProbe` accepts reports only from the owner of `org.kde.KWin`. Residual, UNVERIFIED: it also calls
-`org.kde.kwin.Scripting.isScriptLoaded` at each query to detect a dead script; that method is not in the fetched docs,
-and any error there makes focus unavailable (controller fails closed). Package metadata/layout is unverified on a
-real Plasma 6 install. `window_match` is a substring test on the combined string.
+`KWinFocusProbe` accepts reports only from the owner of `org.kde.KWin`. It also calls
+`org.kde.kwin.Scripting.isScriptLoaded(pluginName)` on `/Scripting` at each query to detect a dead script. VERIFIED
+against KWin master source (`src/scripting/scripting.h`: `Q_SCRIPTABLE bool isScriptLoaded(const QString &pluginName)`,
+interface `org.kde.kwin.Scripting`; `scripting.cpp`: object registered at `/Scripting`, scripts keyed by the package
+`KPlugin.Id`, loaded from `contents/code/main.js` when `X-Plasma-API` is `javascript` and `[Plugins] <Id>Enabled` is true) -
+not on the docs page, and NOT against the Plasma version installed on the Alienware. Any error makes focus unavailable
+(controller fails closed). `window_match` is a substring test on the combined string.
 
 ## Manual-input detection (evdev, read-only) - owner-authorised
 Owner decision: the assist may read the owner's keyboard/mouse on the Alienware to know when to pause. User blizz is
@@ -116,8 +119,8 @@ already in group `input` and `/dev/input/event*` are `crw-rw-rw- root:input`, so
   for those APIs);
 - selects devices from `/sys/class/input/event*/device/capabilities` (EV_KEY with letter/enter/space keys, or BTN_LEFT);
   virtual devices are excluded by default (`include_virtual`); rescans every 2 s for hot-plug;
-- counts EV_KEY press/release/repeat of keys and mouse buttons (not gamepad/touch-tool codes) and keeps ONLY the count,
-  never key codes, so it is not a keylogger; `MonitoredOwnerInput` turns a count into the `manual` edge, so the controller
+- counts EV_KEY press/release/repeat of keys and mouse buttons (not gamepad/touch-tool codes) and keeps ONLY an activity boolean and the
+  last-activity timestamp (no counters, key codes or raw bytes; a test asserts this), so it is not a keylogger; `MonitoredOwnerInput` turns a count into the `manual` edge, so the controller
   pauses on the very next tick for `manual_pause_ms`;
 - reports UNKNOWN (and enable is refused / a running assist is disabled with `signal_lost:...`, keys released) when no
   keyboard device is readable, the thread dies, or the loop stalls (> `stall_s`).
@@ -128,6 +131,24 @@ Things the owner must set: the evdev codes of the assist's own toggle/emergency/
 KWin) never appear on a `/dev/input` node. `startup_self_check` sends nothing, confirms the monitor is live and that the
 assist emitted no key during an idle window, and reports (without blaming the assist) any owner input seen; it returns
 `live_verified=False` always. If the assumption is wrong the assist would pause itself (the fail-safe direction).
+
+## Offline CLI modes (mock sink; nothing is ever sent anywhere)
+```
+python3 -m aion2_assist replay --demo                       # bundled synthetic timeline, zero owner inputs
+python3 -m aion2_assist replay TIMELINE.json|FRAMES_DIR --config C --profile P [--dt 0.1] [--json]
+python3 -m aion2_assist dry-run --demo                      # synthetic PNG screenshots through the PNG loader
+python3 -m aion2_assist dry-run --frames DIR --config C --profile P [--dt 1.0]
+```
+Both run the real Controller with a fake clock and mock adapters, print every decision and suppression reason and the
+emitted key sequence. Frames-dir modes toggle the mock owner on at the first frame and keep the hold key held; the
+watchdog is widened to the fake-clock spacing. Timeline JSON: `{"dt":0.1,"hold":true,"steps":[{"n":3,"hp":0.3,
+"cooldown":["s2"],"target":"enemy","state":"dialog","anchor":false,"age":0.5,"ctl":["toggle"]}, ...]}`.
+The bundled demo config/profile are synthetic and are NOT the owner's binds.
+
+## Stub audit
+No `NotImplementedError` remains. Interfaces (`FrameSource`, `FocusProbe`, `InputSink`, `OwnerInput`, `DBusTransport`,
+`PipeWireReader`) are ABCs with `@abstractmethod` (cannot be instantiated). Every real adapter is implemented source;
+the remaining "stub-like" limits are listed under Remaining blockers.
 
 ## Binds
 The AION2 files on the Alienware (`Saved_Steam/Config/Windows`: Input.ini and EnhancedInput.ini are 2 bytes,
@@ -140,7 +161,7 @@ no chords), duplicates, bad roles, unknown slots and a profile-hash mismatch. `c
 ## Remaining blockers (exact)
 1. Live verification that injected keys are invisible to `/dev/input` (self-check cannot prove it offline).
 2. Real-bus behaviour of `JeepneyTransport`, `gst-launch-1.0` availability/latency on the Alienware, the KWin script
-   package and `isScriptLoaded`: none verifiable offline.
+   package on the installed Plasma version: none verifiable offline (`isScriptLoaded` itself is verified in KWin source).
 3. Owner inputs: real calibration, the filled-in binds/config, `window_match`, `ignore_codes` for the control hotkeys.
 
 ## Cannot be verified offline

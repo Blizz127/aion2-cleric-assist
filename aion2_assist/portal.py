@@ -6,6 +6,7 @@ persist_mode 0, keyboard device only (pointer only if configured), no clipboard,
 a denied/cancelled Request raises PortalDenied and is never retried or worked around.
 """
 import itertools
+from abc import ABC, abstractmethod
 from typing import Callable, Dict, List, NamedTuple, Optional
 
 from .adapters import FocusProbe, FrameSource, InputSink, OwnerInput, OwnerState
@@ -35,36 +36,41 @@ class Incoming(NamedTuple):
     args: tuple
 
 
-class DBusTransport:
+class DBusTransport(ABC):
     supports_receive = False  # can own a name and receive method calls on one persistent connection
 
+    @abstractmethod
     def call(self, dest, path, iface, method, signature, args):
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def request(self, dest, path, iface, method, signature, args, options: dict) -> dict:
         """Portal Request pattern: call (options dict appended as the last a{sv} argument) with a
         handle_token, wait for Request.Response, return unwrapped results. Raises PortalDenied if code != 0."""
-        raise NotImplementedError
 
+    @abstractmethod
     def subscribe(self, iface, member) -> None:
         """Start collecting a signal for pop_signals()."""
-        raise NotImplementedError
 
+    @abstractmethod
     def pop_signals(self, iface, member) -> list:
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def own_name(self, name) -> None:
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def name_owner(self, name) -> str:
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def pop_calls(self, member) -> List[Incoming]:
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def is_closed(self, session_path) -> bool:
         """True once Session.Closed was seen for this session."""
-        raise NotImplementedError
 
 
 class FakeTransport(DBusTransport):
@@ -121,10 +127,11 @@ class FakeTransport(DBusTransport):
 
 
 # ---- ScreenCast capture -------------------------------------------------------
-class PipeWireReader:
+class PipeWireReader(ABC):
     """Turns a PipeWire node/fd into Frames (see pipewire.py for the gst-launch based one)."""
+    @abstractmethod
     def read(self, node_id: int, fd, size) -> Frame:
-        raise NotImplementedError
+        ...
 
 
 class PortalScreenCastSource(FrameSource):
@@ -244,8 +251,8 @@ class KWinFocusProbe(FocusProbe):
     The script uses ONLY documented KWin scripting API: workspace.windowActivated, workspace.activeWindow,
     Window.resourceClass/desktopFileName/caption, callDBus(service, path, interface, method, args...).
     We do not load/run scripts over D-Bus. Each query: (1) take new reports, accepting only calls whose sender
-    owns org.kde.KWin; (2) require that KWin still reports the script loaded (Scripting.isScriptLoaded --
-    UNVERIFIED against docs; any error => focus unavailable => fail closed); (3) return the latest report."""
+    owns org.kde.KWin; (2) require that KWin still reports the script loaded (Scripting.isScriptLoaded(pluginName),
+    verified in KWin master scripting.h/.cpp, not on the installed Plasma; any error => fail closed); (3) return the latest report."""
     def __init__(self, transport: DBusTransport, script_id: str = KWIN_SCRIPT_ID):
         self.t, self.script_id, self.current, self.opened = transport, script_id, None, False
 

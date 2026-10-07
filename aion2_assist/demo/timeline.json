@@ -1,0 +1,181 @@
+{
+ "_comment": "DEMO ONLY: synthetic fight, then suppression cases (dialog, HUD anchor missing, stale frame, owner manual input). Each step = n ticks of make_frame(**fields); ctl = mock owner edges.",
+ "dt": 0.1,
+ "hold": true,
+ "steps": [
+  {
+   "hp": 1.0,
+   "mp": 0.8,
+   "target": "enemy",
+   "cooldown": [],
+   "ctl": [
+    "toggle"
+   ],
+   "n": 1
+  },
+  {
+   "hp": 1.0,
+   "mp": 0.8,
+   "target": "enemy",
+   "cooldown": [
+    "s3"
+   ],
+   "n": 10
+  },
+  {
+   "hp": 1.0,
+   "mp": 0.8,
+   "target": "enemy",
+   "cooldown": [
+    "s3",
+    "s4"
+   ],
+   "n": 9
+  },
+  {
+   "hp": 0.3,
+   "mp": 0.8,
+   "target": "enemy",
+   "cooldown": [
+    "s3",
+    "s4"
+   ],
+   "n": 1
+  },
+  {
+   "hp": 0.5,
+   "mp": 0.8,
+   "target": "enemy",
+   "cooldown": [
+    "s1",
+    "s3",
+    "s4"
+   ],
+   "n": 10
+  },
+  {
+   "hp": 0.5,
+   "mp": 0.8,
+   "target": "enemy",
+   "cooldown": [
+    "s1",
+    "s2",
+    "s3"
+   ],
+   "n": 4
+  },
+  {
+   "hp": 0.95,
+   "mp": 0.8,
+   "target": "enemy",
+   "cooldown": [
+    "s1",
+    "s2",
+    "s3"
+   ],
+   "n": 6
+  },
+  {
+   "hp": 0.95,
+   "mp": 0.8,
+   "target": "enemy",
+   "cooldown": [
+    "s1",
+    "s2",
+    "s3",
+    "s4"
+   ],
+   "n": 20
+  },
+  {
+   "hp": 0.95,
+   "mp": 0.8,
+   "target": "enemy",
+   "cooldown": [
+    "s1",
+    "s2",
+    "s3"
+   ],
+   "n": 1
+  },
+  {
+   "hp": 0.95,
+   "mp": 0.8,
+   "target": "enemy",
+   "cooldown": [
+    "s1",
+    "s2",
+    "s3",
+    "s4"
+   ],
+   "n": 9
+  },
+  {
+   "hp": 0.95,
+   "mp": 0.8,
+   "target": "enemy",
+   "cooldown": [
+    "s2",
+    "s3",
+    "s4"
+   ],
+   "n": 4
+  },
+  {
+   "hp": 0.95,
+   "mp": 0.8,
+   "target": "enemy",
+   "cooldown": [
+    "s2",
+    "s3"
+   ],
+   "n": 3,
+   "state": "dialog"
+  },
+  {
+   "hp": 0.95,
+   "mp": 0.8,
+   "target": "enemy",
+   "cooldown": [
+    "s2",
+    "s3"
+   ],
+   "n": 2,
+   "anchor": false
+  },
+  {
+   "hp": 0.95,
+   "mp": 0.8,
+   "target": "enemy",
+   "cooldown": [
+    "s2",
+    "s3"
+   ],
+   "n": 2,
+   "age": 0.5
+  },
+  {
+   "hp": 0.95,
+   "mp": 0.8,
+   "target": "enemy",
+   "cooldown": [
+    "s2",
+    "s3"
+   ],
+   "n": 1,
+   "ctl": [
+    "manual"
+   ]
+  },
+  {
+   "hp": 0.95,
+   "mp": 0.8,
+   "target": "enemy",
+   "cooldown": [
+    "s2",
+    "s3"
+   ],
+   "n": 12
+  }
+ ]
+}

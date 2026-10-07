@@ -72,8 +72,7 @@ class FakeSystem:
 class Parsing(unittest.TestCase):
     def test_event_struct_and_partial_carry(self):
         data = ev(1, 30, 1) + ev(0, 0, 0)
-        evs, rest = parse_events(data + data[:7])
-        self.assertEqual((evs, rest), ([(1, 30, 1), (0, 0, 0)], data[:7]))
+        self.assertEqual(parse_events(data + data[:7]), [(1, 30, 1), (0, 0, 0)])
         self.assertEqual(EVENT.size, 24)
 
     def test_caps_and_classification(self):
@@ -111,28 +110,66 @@ class Monitoring(unittest.TestCase):
         self.fs.send("event0", ev(1, 30, 1), ev(0, 0, 0), ev(1, 30, 0), ev(2, 0, 5), ev(1, 30, 2))
         self.fs.send("event1", ev(1, em.BTN_LEFT, 1), ev(1, 0x14A, 1), ev(1, 0x133, 1))  # click; BTN_TOUCH; gamepad
         self.m.step()
-        self.assertEqual(self.m.take_activity(), 4)  # press, release, repeat, click
-        self.assertEqual(self.m.take_activity(), 0)
+        self.assertIs(self.m.take_activity(), True)  # press/release/repeat/click
+        self.assertIs(self.m.take_activity(), False)
 
     def test_ignore_codes_for_assist_hotkeys(self):
         m = self.fs.monitor(self.clock, ignore_codes=[67])
         m.step()
         self.fs.send("event0", ev(1, 67, 1), ev(1, 67, 0))
         m.step()
-        self.assertEqual(m.take_activity(), 0)
+        self.assertFalse(m.take_activity())
         self.fs.send("event0", ev(1, 68, 1))
         m.step()
-        self.assertEqual(m.take_activity(), 1)
+        self.assertTrue(m.take_activity())
 
-    def test_split_event_across_reads(self):
+    def test_partial_trailing_bytes_are_dropped_not_buffered(self):
         self.m.step()
         raw = ev(1, 30, 1)
         self.fs.send("event0", raw[:10])
         self.m.step()
-        self.assertEqual(self.m.take_activity(), 0)
-        self.fs.send("event0", raw[10:])
+        self.assertFalse(self.m.take_activity())
+        self.fs.send("event0", raw[10:])  # no carry-over: the tail alone is not a whole event
         self.m.step()
-        self.assertEqual(self.m.take_activity(), 1)
+        self.assertFalse(self.m.take_activity())
+
+    def test_only_boolean_and_timestamp_retained(self):
+        marker = 0x1D3  # distinctive key code
+        self.clock.t = 5.0
+        self.m.step()
+        raw = ev(1, marker, 1) + ev(1, marker, 0) + ev(1, marker, 2)
+        self.fs.send("event0", raw)
+        self.clock.t = 7.5
+        self.m.step()
+        self.assertEqual(self.m.last_activity, 7.5)
+        self.assertIs(self.m.take_activity(), True)
+        self.assertEqual(self.m.last_activity, 7.5)  # timestamp survives, activity flag cleared
+        allowed = {"clock", "sysfs", "devdir", "_open", "_read", "_close", "rescan_s", "stall_s", "ignore",
+                   "include_virtual", "devices", "sel", "_lock", "_active", "last_activity", "heartbeat", "last_scan",
+                   "error", "thread", "_stop"}
+        self.assertEqual(set(vars(self.m)), allowed)  # no counter-like attribute exists
+        self.assertIsInstance(self.m._active, bool)
+        self.assertEqual(self.m.ignore, set())  # configuration only, never observations
+
+        def walk(o, depth=0):
+            yield o
+            if depth < 4 and isinstance(o, (list, tuple, set, frozenset)):
+                for x in o:
+                    yield from walk(x, depth + 1)
+            elif depth < 4 and isinstance(o, dict):
+                for k, v in o.items():
+                    yield from walk(k, depth + 1)
+                    yield from walk(v, depth + 1)
+            elif depth < 4 and hasattr(o, "__dict__") and type(o).__module__.startswith("aion2_assist"):
+                yield from walk(vars(o), depth + 1)
+        for name, val in vars(self.m).items():
+            if name in ("clock", "_open", "_read", "_close", "_lock", "sel", "thread", "_stop"):
+                continue
+            for x in walk(val):
+                self.assertNotEqual(x, marker, name)
+                self.assertNotIsInstance(x, (bytes, bytearray), name)  # no raw event content
+        for dev in self.m.devices.values():
+            self.assertEqual(set(vars(dev)), {"info", "fd"})
 
     def test_hotplug_add_and_remove(self):
         self.m.step()
@@ -204,11 +241,11 @@ class Status(unittest.TestCase):
         m.start(poll_s=0.01)
         fs.send("event0", ev(1, 30, 1))
         for _ in range(200):
-            if m.status().live and m._count:
+            if m.status().live and m._active:
                 break
             time.sleep(0.01)
         self.assertTrue(m.status().live)
-        self.assertEqual(m.take_activity(), 1)
+        self.assertTrue(m.take_activity())
         m.stop()
 
 
@@ -316,7 +353,7 @@ class WithController(unittest.TestCase):
         self.rig(fs)
         self.mon.step()
         r = startup_self_check(self.mon, self.sink, lambda s: self.mon.step(), 1.0)
-        self.assertEqual((r.ok, r.events_seen, r.sent_by_assist, r.live_verified), (True, 0, 0, False))
+        self.assertEqual((r.ok, r.activity_seen, r.sent_by_assist, r.live_verified), (True, False, 0, False))
         self.sink.events.append((0.0, "4"))
         self.sink.events.append((0.1, "4"))
         fs.send("event0", ev(1, 30, 1))
@@ -333,7 +370,7 @@ class WithController(unittest.TestCase):
             fs.send("event0", ev(1, 30, 1))
             self.mon.step()
         r = startup_self_check(self.mon, self.sink, sleep)
-        self.assertEqual((r.ok, r.events_seen, r.sent_by_assist), (True, 1, 0))
+        self.assertEqual((r.ok, r.activity_seen, r.sent_by_assist), (True, True, 0))
         self.assertIn("not attributable", r.note)
 
 

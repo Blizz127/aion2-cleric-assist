@@ -1,33 +1,38 @@
-"""Adapter interfaces + MOCK implementations. Real Wayland adapters are stubs (NotImplementedError)."""
+"""Adapter interfaces (abstract) + MOCK implementations. Real adapters live in portal.py, session_bus.py, pipewire.py, evdev_monitor.py."""
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 from .frame import Frame
 
 
-class FrameSource:
+class FrameSource(ABC):
+    @abstractmethod
     def grab(self) -> Frame:
-        raise NotImplementedError
+        ...
 
 
-class FocusProbe:
+class FocusProbe(ABC):
     available = True  # False => the controller refuses to enable (no reliable focus signal)
 
+    @abstractmethod
     def active_window(self) -> str:
         """Return a string identifying the active window (title/app id)."""
-        raise NotImplementedError
 
 
-class InputSink:
+class InputSink(ABC):
     """key_down/key_up/release_all are the primitives; press() guarantees key-up via finally."""
+    @abstractmethod
     def key_down(self, key: str) -> None:
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def key_up(self, key: str) -> None:
-        raise NotImplementedError
+        ...
 
+    @abstractmethod
     def release_all(self) -> None:
-        raise NotImplementedError
+        ...
 
     def hold(self) -> None:
         """Fixed, deterministic key-down duration (no jitter). Real sinks sleep a constant."""
@@ -48,11 +53,12 @@ class OwnerState:
     manual: bool = False     # edge: owner pressed a game key by hand (assist's own events excluded)
 
 
-class OwnerInput:
+class OwnerInput(ABC):
     provides_manual_input = True  # False => the controller refuses to enable (cannot see owner keys)
 
+    @abstractmethod
     def poll(self) -> OwnerState:
-        raise NotImplementedError
+        ...
 
 
 # ---- mocks ---------------------------------------------------------------
