@@ -53,10 +53,18 @@ def _bar_color(frame: Frame, rect) -> list:
     return [round(c) for c in mean_rgb(band)]
 
 
+def _check_gaps(what, refs):
+    names = list(refs)
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            if dist(refs[a], refs[b]) < MIN_TEMPLATE_GAP:
+                raise CalibrationError(f"{what}: '{a}' and '{b}' screenshots are indistinguishable")
+
+
 def build_profile(spec: dict, shots: Dict[str, Frame]) -> Profile:
     """spec: {frame_size, ui_scale, regions{anchor,hp_bar,mp_bar,target,slots{},states{}}}.
-    shots: 'normal' (bars non-empty, target present, all slots ready), 'cooldown' (all slots on
-    cooldown), 'no_target', plus optional one shot per state name (dialog/loading/death...)."""
+    shots: 'normal' (bars non-empty, enemy targeted, all slots ready), 'cooldown' (all slots on
+    cooldown), 'no_target', optional 'friendly_target', plus optional one shot per state name (dialog/loading/death...)."""
     size = tuple(spec["frame_size"])
     reg = spec["regions"]
     for need in ("normal", "cooldown", "no_target"):
@@ -78,17 +86,17 @@ def build_profile(spec: dict, shots: Dict[str, Frame]) -> Profile:
     t = {"anchor": tpl(reg["anchor"]), "hp_color": _bar_color(normal, tuple(reg["hp_bar"])),
          "mp_color": _bar_color(normal, tuple(reg["mp_bar"]))}
     tr = tuple(reg["target"])
-    t["target"] = {"present": [round(c, 2) for c in mean_rgb(normal.flat(tr))],
-                   "absent": [round(c, 2) for c in mean_rgb(nt.flat(tr))]}
-    if dist(t["target"]["present"], t["target"]["absent"]) < MIN_TEMPLATE_GAP:
-        raise CalibrationError("target present/absent screenshots are indistinguishable in the target region")
+    t["target"] = {"enemy": [round(c, 2) for c in mean_rgb(normal.flat(tr))],
+                   "none": [round(c, 2) for c in mean_rgb(nt.flat(tr))]}
+    if "friendly_target" in shots:  # optional: lets the assist refuse heals when an ally is targeted
+        t["target"]["friendly"] = [round(c, 2) for c in mean_rgb(shots["friendly_target"].flat(tr))]
+    _check_gaps("target", t["target"])
     t["slots"] = {}
     for sid, r in reg["slots"].items():
         ready = [round(v, 2) for v in mean_vs(normal.flat(tuple(r)))]
         cool = [round(v, 2) for v in mean_vs(cd.flat(tuple(r)))]
-        if dist(ready, cool) < MIN_TEMPLATE_GAP:
-            raise CalibrationError(f"slot {sid}: ready and cooldown screenshots are indistinguishable")
         t["slots"][sid] = {"ready": ready, "cooldown": cool}
+        _check_gaps(f"slot {sid}", t["slots"][sid])
     t["states"] = {}
     regions_states = {}
     for name, r in reg.get("states", {}).items():

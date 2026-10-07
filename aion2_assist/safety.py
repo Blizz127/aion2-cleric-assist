@@ -5,7 +5,7 @@ import sys
 from .adapters import FocusProbe, FrameSource, InputSink, OwnerInput
 from .config import Config
 from .decision import Decider
-from .perception import Perceiver
+from .perception import Perceiver, valid_fraction
 from .profile import Profile, ProfileMismatch
 
 
@@ -35,6 +35,18 @@ class Controller:
         self.misses = 0
         self.desync = False
 
+    def refusal(self):
+        """Why enabling must be refused (missing safety signal), or None."""
+        if not getattr(self.focus, "available", False):
+            return "no_reliable_focus_signal"
+        if not getattr(self.owner, "provides_manual_input", False):
+            return "no_manual_input_signal"
+        return None
+
+    def shutdown(self):
+        self.enabled = False
+        self.sink.release_all()
+
     def _out(self, now, event, reason, **extra):
         rec = {"t": round(now, 4), "event": event, "reason": reason, "enabled": self.enabled, **extra}
         self.log(rec)
@@ -44,7 +56,21 @@ class Controller:
         return self._out(now, "suppress", reason, **extra)
 
     def tick(self) -> dict:
-        """One loop iteration. Emits at most one key; returns the structured log record."""
+        """One loop iteration. Emits at most one key; returns the structured log record.
+        Any exception => disable, release every key (try/finally), log, emit nothing more."""
+        try:
+            return self._tick()
+        except BaseException as e:
+            self.enabled = False
+            try:
+                self.sink.release_all()
+            finally:
+                rec = self._sup(self.last_tick or 0.0, "exception_fail_closed", error=type(e).__name__)
+            if not isinstance(e, Exception):
+                raise
+            return rec
+
+    def _tick(self) -> dict:
         cfg, now = self.cfg, self.clock()
         st = self.owner.poll()
         stalled = self.last_tick is not None and (now - self.last_tick) * 1000 > cfg.watchdog_ms
@@ -53,10 +79,15 @@ class Controller:
             self.enabled = False
             return self._sup(now, "emergency_stop")
         if st.toggle:
+            why = self.refusal() if not self.enabled else None
+            if why:
+                return self._sup(now, f"enable_refused:{why}")
             self.enabled = not self.enabled
             if self.enabled:  # explicit re-enable clears the desync latch
                 self.desync, self.misses = False, 0
                 self.pending.clear()
+            else:
+                self.sink.release_all()
         if st.manual:
             self.pause_until = now + cfg.manual_pause_ms / 1000.0
         if not self.enabled:
@@ -79,14 +110,20 @@ class Controller:
             frame = self.capture.grab()
         except Exception as e:
             return self._sup(now, "capture_error", error=type(e).__name__)
-        if (now - frame.ts) * 1000 > cfg.max_stale_ms:
-            return self._sup(now, "stale_frame", age_ms=round((now - frame.ts) * 1000, 1))
+        age_ms = (now - frame.ts) * 1000
+        if age_ms > cfg.max_stale_ms:
+            return self._sup(now, "stale_frame", age_ms=round(age_ms, 1))
+        if age_ms < -cfg.future_tolerance_ms:
+            return self._sup(now, "future_frame", age_ms=round(age_ms, 1))
         try:
             obs = self.perceiver.read(frame)
         except ProfileMismatch as e:
             return self._sup(now, "profile_mismatch", detail=str(e))
         except Exception as e:
             return self._sup(now, "perception_error", error=type(e).__name__)
+        for name in ("hp", "mp"):
+            if not valid_fraction(getattr(obs, name).value):
+                return self._sup(now, f"invalid_reading:{name}")
         for name in ("state", "anchor", "hp", "mp"):
             if getattr(obs, name).confidence < cfg.min_confidence:
                 return self._sup(now, f"low_confidence:{name}")
@@ -103,8 +140,8 @@ class Controller:
         if self.last_emit is not None and now - self.last_emit < cfg.min_spacing_s:
             return self._sup(now, "rate_cap", wanted=d.slot)
         slot = cfg.slots[d.slot]
+        self.last_emit = now  # counts even if press() raises: fail closed, never retry
         self.sink.press(slot.key, now)
-        self.last_emit = now
         self.decider.record_press(d.slot, now)
         if slot.expect_cooldown:
             self.pending[d.slot] = (now, now + slot.cast + cfg.response_ms / 1000.0)

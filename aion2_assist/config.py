@@ -46,6 +46,7 @@ class Config:
     # safety
     mode: str = "hold"              # "hold" (default) or "toggle"
     max_stale_ms: float = 250.0
+    future_tolerance_ms: float = 50.0  # frame timestamps further ahead than this are rejected
     manual_pause_ms: float = 1500.0
     max_keys_per_sec: float = 4.0
     watchdog_ms: float = 500.0

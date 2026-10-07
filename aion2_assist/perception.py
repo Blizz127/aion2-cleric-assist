@@ -1,4 +1,5 @@
 """Readers over a calibrated Frame. Every reading is (value, confidence, frame_timestamp)."""
+import math
 from dataclasses import dataclass
 from typing import Dict, Optional
 
@@ -28,11 +29,17 @@ def read_bar(frame: Frame, rect, color, tol) -> Reading:
     return Reading(run / w, conf, frame.ts)
 
 
-def classify2(stat, a, b):
-    """Nearest of two reference stats -> ('a'|'b', confidence)."""
-    da, db, gap = dist(stat, a), dist(stat, b), dist(a, b)
-    conf = max(0.0, 1.0 - min(da, db) / gap) * abs(da - db) / (da + db + 1e-9)
-    return ("a" if da <= db else "b"), conf
+def valid_fraction(x) -> bool:
+    return isinstance(x, (int, float)) and math.isfinite(x) and 0.0 <= x <= 1.0
+
+
+def classifyn(stat, refs: dict):
+    """Nearest reference -> (name, confidence). Confident only when close to the nearest
+    reference relative to its gap to the other references, and clearly nearer than the runner-up."""
+    ds = sorted((dist(stat, r), n) for n, r in refs.items())
+    (d1, n1), (d2, _) = ds[0], ds[1]
+    gap = min(dist(refs[n1], r) for n, r in refs.items() if n != n1)
+    return n1, max(0.0, 1.0 - d1 / gap) * (d2 - d1) / (d2 + d1 + 1e-9)
 
 
 @dataclass
@@ -41,7 +48,7 @@ class Observation:
     hp: Reading
     mp: Reading
     anchor: Reading           # value True = HUD anchor matches
-    target: Reading           # value bool
+    target: Reading           # value 'enemy' | 'none' | 'friendly'
     state: Reading            # value None or 'dialog'/'loading'/'death'/...
     slots: Dict[str, Reading]  # value 'ready' | 'cooldown'
 
@@ -60,12 +67,12 @@ class Perceiver:
         anchor = Reading(ok, score if ok else 1.0 - score, ts)
         hp = read_bar(frame, tuple(reg["hp_bar"]), tpl["hp_color"], thr["bar_tol"])
         mp = read_bar(frame, tuple(reg["mp_bar"]), tpl["mp_color"], thr["bar_tol"])
-        k, c = classify2(mean_rgb(frame.flat(tuple(reg["target"]))), tpl["target"]["present"], tpl["target"]["absent"])
-        target = Reading(k == "a", c, ts)
+        k, c = classifyn(mean_rgb(frame.flat(tuple(reg["target"]))), tpl["target"])
+        target = Reading(k, c, ts)  # 'enemy' | 'none' | 'friendly' (friendly only if calibrated)
         slots = {}
         for sid, r in reg["slots"].items():
-            k, c = classify2(mean_vs(frame.flat(tuple(r))), tpl["slots"][sid]["ready"], tpl["slots"][sid]["cooldown"])
-            slots[sid] = Reading("ready" if k == "a" else "cooldown", c, ts)
+            k, c = classifyn(mean_vs(frame.flat(tuple(r))), tpl["slots"][sid])
+            slots[sid] = Reading(k, c, ts)  # 'ready' | 'cooldown'
         state = self._state(frame, reg, tpl, thr, ts)
         return Observation(ts, hp, mp, anchor, target, state, slots)
 

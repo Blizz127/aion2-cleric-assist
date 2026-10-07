@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from .config import Config, SlotCfg, UPKEEP_ROLES
-from .perception import Observation
+from .perception import Observation, valid_fraction
 
 
 @dataclass(frozen=True)
@@ -14,6 +14,7 @@ class Decision:
 
 
 NONE = None
+SELF_ROLES = ("heal", "hot", "shield")
 
 
 class Decider:
@@ -62,6 +63,10 @@ class Decider:
             return "cooldown_tracked"
         if obs.mp.value * c.mp_max < s.mp_cost:
             return "mp"
+        if s.role in SELF_ROLES:  # self-only heals: refuse when the target is unclear or an ally
+            t = obs.target
+            if t.confidence < c.min_confidence or t.value not in ("enemy", "none"):
+                return "heal_target_unclear"
         r = obs.slots.get(s.id)
         if r is None or r.confidence < c.min_confidence:
             return "slot_uncertain"
@@ -80,8 +85,14 @@ class Decider:
     # ---- decide ------------------------------------------------------
     def decide(self, obs: Observation, now: float) -> Decision:
         c = self.cfg
-        if (now - obs.ts) * 1000 > c.max_stale_ms:
+        age_ms = (now - obs.ts) * 1000
+        if age_ms > c.max_stale_ms:
             return Decision(NONE, "stale_observation")
+        if age_ms < -c.future_tolerance_ms:
+            return Decision(NONE, "future_timestamp")
+        for name in ("hp", "mp"):
+            if not valid_fraction(getattr(obs, name).value):
+                return Decision(NONE, f"invalid_reading:{name}")
         for name in ("hp", "mp", "state", "anchor"):
             if getattr(obs, name).confidence < c.min_confidence:
                 return Decision(NONE, f"low_confidence:{name}")
@@ -104,7 +115,7 @@ class Decider:
             return Decision(s.id, f"upkeep:{s.role}")
         if hp < c.safe_hp or pred < c.emergency_hp:
             return Decision(NONE, "unsafe_for_damage:hp")
-        if not (obs.target.confidence >= c.min_confidence and obs.target.value):
+        if not (obs.target.confidence >= c.min_confidence and obs.target.value == "enemy"):
             return Decision(NONE, "no_target")
         heal_costs = [x.mp_cost for x in c.enabled_slots() if x.role == "heal"]
         reserve = min(heal_costs) if heal_costs else 0.0

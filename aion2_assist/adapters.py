@@ -11,14 +11,33 @@ class FrameSource:
 
 
 class FocusProbe:
+    available = True  # False => the controller refuses to enable (no reliable focus signal)
+
     def active_window(self) -> str:
         """Return a string identifying the active window (title/app id)."""
         raise NotImplementedError
 
 
 class InputSink:
-    def press(self, key: str, t: float) -> None:
+    """key_down/key_up/release_all are the primitives; press() guarantees key-up via finally."""
+    def key_down(self, key: str) -> None:
         raise NotImplementedError
+
+    def key_up(self, key: str) -> None:
+        raise NotImplementedError
+
+    def release_all(self) -> None:
+        raise NotImplementedError
+
+    def hold(self) -> None:
+        """Fixed, deterministic key-down duration (no jitter). Real sinks sleep a constant."""
+
+    def press(self, key: str, t: float) -> None:
+        self.key_down(key)
+        try:
+            self.hold()
+        finally:
+            self.key_up(key)
 
 
 @dataclass
@@ -30,6 +49,8 @@ class OwnerState:
 
 
 class OwnerInput:
+    provides_manual_input = True  # False => the controller refuses to enable (cannot see owner keys)
+
     def poll(self) -> OwnerState:
         raise NotImplementedError
 
@@ -37,9 +58,29 @@ class OwnerInput:
 # ---- mocks ---------------------------------------------------------------
 class MockSink(InputSink):
     def __init__(self):
-        self.events: List[Tuple[float, str]] = []
+        self.events: List[Tuple[float, str]] = []  # completed presses (t, key)
+        self.raw: List[Tuple[str, str]] = []       # ("down"|"up", key) in order
+        self.down = set()
+        self.hold_error = None
+
+    def key_down(self, key):
+        self.raw.append(("down", key))
+        self.down.add(key)
+
+    def key_up(self, key):
+        self.raw.append(("up", key))
+        self.down.discard(key)
+
+    def release_all(self):
+        for k in sorted(self.down):
+            self.key_up(k)
+
+    def hold(self):
+        if self.hold_error:
+            raise self.hold_error
 
     def press(self, key, t):
+        super().press(key, t)
         self.events.append((t, key))
 
     @property
@@ -81,26 +122,4 @@ class MockOwnerInput(OwnerInput):
         return s
 
 
-# ---- real adapters: STUBS, deliberately unimplemented -----------------------
-class PortalScreenCastSource(FrameSource):
-    """STUB. Real: xdg-desktop-portal ScreenCast -> PipeWire stream (user consent dialog)."""
-    def grab(self):
-        raise NotImplementedError("portal ScreenCast/PipeWire capture is not implemented (offline prototype)")
-
-
-class KWinFocusProbe(FocusProbe):
-    """STUB. Real: KWin active-window query over D-Bus/scripting."""
-    def active_window(self):
-        raise NotImplementedError("KWin active-window query is not implemented (offline prototype)")
-
-
-class PortalLibeiSink(InputSink):
-    """STUB. Real: xdg-desktop-portal RemoteDesktop session + libei (consented input path)."""
-    def press(self, key, t):
-        raise NotImplementedError("portal RemoteDesktop/libei input is not implemented (offline prototype)")
-
-
-class HotkeyOwnerInput(OwnerInput):
-    """STUB. Real: owner hotkeys (toggle/emergency/hold) and manual-input detection."""
-    def poll(self):
-        raise NotImplementedError("owner hotkey/manual-input source is not implemented (offline prototype)")
+# Real adapters (portal call sequences over an injectable D-Bus transport) live in portal.py.
