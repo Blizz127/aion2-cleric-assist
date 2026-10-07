@@ -5,9 +5,8 @@ Solo auto-cast assist for an Aion 2 Cleric on Bazzite/KDE Wayland (Steam appid 3
 ## OFFLINE ONLY. Live use risks an NC "Integrated Account Ban".
 Nothing here has been run against the game, the portals, or the network. The owner has accepted the
 account-ban risk for any future live trial; that trial is still an explicit, separate step. There is no `run`
-command, no live adapter that can start (the real D-Bus transport is a stub), and the controller starts
-**OFF**. Pure stdlib Python 3.12 (numpy and PIL are not installed; a minimal PNG reader is used, PIL is
-used automatically if present).
+command, no live adapter that can start (the real transport exists only as source tested against a fake connection), and the controller starts
+**OFF**. Core is stdlib Python 3.12 (numpy/PIL not installed; minimal PNG reader). Optional venv dep: jeepney (below).
 
 ## Architecture
 ```
@@ -67,25 +66,62 @@ python3 -m aion2_assist check-config --config config.json                  # rej
 ## Activation gates still required (in order)
 1. Real screenshot calibration (above) with verified readings.
 2. Real skill/bind config (no skill names or binds are invented here; `UNSET_*` keys are refused).
-3. Real portal capture and input adapters: a persistent session-bus transport (see blockers) plus a PipeWire frame
-   reader, then portal consent dialogs (ScreenCast, RemoteDesktop, GlobalShortcuts).
-4. A manual-input signal and a focus signal that actually work (see blockers) — until then the controller refuses to enable.
+3. Exercise the real adapters on the target (first contact with real portals/bus/gst): consent dialogs for
+   ScreenCast, RemoteDesktop, GlobalShortcuts; install the KWin focus package; measure capture latency.
+4. A manual-input signal (UNKNOWN today, see above) - until then the controller refuses to enable.
 5. The owner's explicit live trial.
 
-## What is stubbed
-`SessionBusTransport` (real D-Bus), `PipeWireReader` (frames from PipeWire). Everything else in `portal.py` is
-implemented but only exercised against `FakeTransport`.
+## Dependencies (isolated venv only)
+`python3 -m venv .venv` (gitignored); `.venv/bin/pip install -r requirements.txt` -> **jeepney==0.9.0** (pure Python,
+no other deps). Only `session_bus.py` and its test need it; everything else is stdlib, and without jeepney that
+test module is skipped. No global/--user installs.
 
-## Blockers (stated exactly)
-- **Manual-input detection**: no user-session API on KDE Wayland reports other applications' key/mouse events
-  (RemoteDesktop/libei is output-only; GlobalShortcuts only fires for shortcuts we register; evdev/uinput/root are
-  out of scope). `GlobalShortcutsOwnerInput.provides_manual_input = False`, so the controller REFUSES to enable with
-  the real stack. Nothing is substituted. Resolving it needs an owner-approved signal.
-- **Focus detection**: the KWin scripting route needs a process that owns a D-Bus name and receives the script's
-  `callDBus` report. Only `gdbus`/`busctl` (one connection per call) exist; a D-Bus library is not installed and
-  installing one is out of scope. `KWinFocusProbe.available` follows `transport.supports_receive` (False for the stub).
-- **Persistent portal sessions**: portal sessions die with the creating connection, so per-call `gdbus` cannot hold one.
-- Pointing at the right window is by `window_match` substring only (class/title unknown until observed).
+## What is implemented vs stubbed
+- `session_bus.JeepneyTransport`: persistent connection, owns a bus name, answers method calls to us (focus
+  reports), tracks `Request::Response` and `Session::Closed` (accepted only from the current owner of
+  org.freedesktop.portal.Desktop), subscribed signals, fd passthrough. Tested ONLY against a fake connection;
+  `open_session_bus()` (the one real-bus entry point) is never called by tests.
+- `pipewire.GStreamerPipeWireReader`: subprocess to `gst-launch-1.0 pipewiresrc ... ! fdsink` (stdlib). Devbox has no
+  gst/pipewire tools, so never executed. Target requirement: `gst-launch-1.0` + `gst-plugin-pipewire`, width*3
+  divisible by 4, capture at exactly the profile resolution (no scaling; mismatch fails closed). Frame timestamp =
+  receipt time, so real latency is unmeasured.
+- Portal adapters follow the xdg-desktop-portal docs: `persist_mode` 0, no `restore_token`, keyboard device only
+  (pointer only with `pointer_buttons=True`), clipboard never requested and a grant that includes clipboard or
+  anything not requested is refused and closed; a denied/cancelled Request raises `PortalDenied`, is never retried
+  or auto-accepted; a `Session.Closed` stops capture/input/hotkeys (fail closed). GlobalShortcuts: CreateSession,
+  BindShortcuts (toggle/emergency/hold; triggers are only *preferred*, the user confirms in the portal UI),
+  Activated/Deactivated signals.
+- No `run` command exists; nothing starts any of this.
+
+## Focus (KWin) - corrected design
+Earlier draft assumed D-Bus `loadScript`/`run`/`unloadScript` on `/Scripting`; those are NOT in the KWin docs
+(develop.kde.org/docs/plasma/kwin/api/) and were removed. `workspace.activeWindow` is a KWin *scripting* property,
+not a D-Bus method. Now: the owner installs the package in `kwin_script/aion2assist_focus` (documented route:
+`kpackagetool6 --type=KWin/Script -i kwin_script/aion2assist_focus`, then
+`kwriteconfig6 --file kwinrc --group Plugins --key aion2assist_focusEnabled true`, then
+`qdbus org.kde.KWin /KWin reconfigure`). The script uses only documented API (`workspace.windowActivated`,
+`workspace.activeWindow`, `Window.resourceClass/desktopFileName/caption`, `callDBus`) and pushes
+`class|desktopFile|caption` to our bus name `org.aion2assist.focus` (`/focus`, `org.aion2assist.Focus.Report`).
+`KWinFocusProbe` accepts reports only from the owner of `org.kde.KWin`. Residual, UNVERIFIED: it also calls
+`org.kde.kwin.Scripting.isScriptLoaded` at each query to detect a dead script; that method is not in the fetched docs,
+and any error there makes focus unavailable (controller fails closed). Package metadata/layout is unverified on a
+real Plasma 6 install. `window_match` is a substring test on the combined string.
+
+## Manual-input detection: UNKNOWN (hard no-enable gate)
+`provides_manual_input` is False and `Controller` refuses to enable (`enable_refused:no_manual_input_signal`). Nothing
+substitutes for it. What would be required: a user-session API that delivers *global* keyboard/mouse events of the
+owner while another app has focus. None exists among the approved ones: RemoteDesktop/libei is output-only;
+GlobalShortcuts fires only for shortcuts we register (and grabbing the game binds would swallow them);
+InputCapture portal captures input only after a pointer-barrier activation and is for forwarding, not monitoring;
+KWin scripts expose no raw key stream. Candidates outside the approved set (not implemented, need owner decision):
+libinput/evdev reading (`input` group or root), or a compositor-side extension. Until such a signal exists, enable is
+impossible by design.
+
+## Remaining blockers (exact)
+1. Manual-input signal: UNKNOWN, no approved API (above). Hard gate.
+2. Real-bus behaviour of `JeepneyTransport`, `gst-launch-1.0` availability/latency on the Alienware, and the KWin
+   script package + `isScriptLoaded`: none verifiable offline.
+3. Real calibration, real skill/bind config, `window_match` value (all owner inputs).
 
 ## Cannot be verified offline
 Whether Proton/XWayland accepts portal (libei) keyboard input; NC detection behaviour; real capture latency and

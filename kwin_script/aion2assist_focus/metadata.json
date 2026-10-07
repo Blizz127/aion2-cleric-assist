@@ -1,0 +1,12 @@
+{
+    "KPlugin": {
+        "Id": "aion2assist_focus",
+        "Name": "AION2 assist focus reporter",
+        "Description": "Reports the active window class/title to org.aion2assist.focus over D-Bus (offline prototype)",
+        "Version": "0.1",
+        "License": "MIT"
+    },
+    "KPackageStructure": "KWin/Script",
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js"
+}
