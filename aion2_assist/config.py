@@ -56,11 +56,11 @@ class Config:
 
     @staticmethod
     def from_dict(d: dict) -> "Config":
-        d = dict(d)
+        d = {k: v for k, v in d.items() if not k.startswith("_")}  # allow _comment keys
         raw = d.pop("slots", {})
         slots = {}
         for sid, s in raw.items():
-            s = dict(s)
+            s = {k: v for k, v in s.items() if not k.startswith("_")}
             try:
                 slot = SlotCfg(id=sid, **s)
             except TypeError as e:
