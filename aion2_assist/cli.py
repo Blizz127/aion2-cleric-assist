@@ -46,6 +46,23 @@ def cmd_check_config(a):
     return 0
 
 
+def cmd_binds(a):
+    from .binds import make_template, validate_binds
+    if a.action == "template":
+        prof = load_profile(a.profile)
+        with open(a.file, "w") as f:
+            json.dump(make_template(prof), f, indent=1)
+        print(f"template written to {a.file}: fill in key/role per slot (blank keys are refused)")
+        return 0
+    with open(a.file) as f:
+        problems = validate_binds(json.load(f), load_profile(a.profile) if a.profile else None)
+    for p in problems:
+        print(f"bind problem: {p}", file=sys.stderr)
+    if not problems:
+        print("binds ok")
+    return 2 if problems else 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="aion2_assist", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -62,7 +79,14 @@ def main(argv=None):
     k = sub.add_parser("check-config", help="validate a config (rejects placeholder keys)")
     k.add_argument("--config", required=True)
     k.set_defaults(fn=cmd_check_config)
+    b = sub.add_parser("binds", help="write a blank binds template / validate a filled-in file")
+    b.add_argument("action", choices=("template", "validate"))
+    b.add_argument("file")
+    b.add_argument("--profile", help="required for template; optional for validate (checks slot ids)")
+    b.set_defaults(fn=cmd_binds)
     a = ap.parse_args(argv)
+    if a.cmd == "binds" and a.action == "template" and not a.profile:
+        ap.error("binds template needs --profile")
     return a.fn(a)
 
 

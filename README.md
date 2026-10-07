@@ -68,7 +68,7 @@ python3 -m aion2_assist check-config --config config.json                  # rej
 2. Real skill/bind config (no skill names or binds are invented here; `UNSET_*` keys are refused).
 3. Exercise the real adapters on the target (first contact with real portals/bus/gst): consent dialogs for
    ScreenCast, RemoteDesktop, GlobalShortcuts; install the KWin focus package; measure capture latency.
-4. A manual-input signal (UNKNOWN today, see above) - until then the controller refuses to enable.
+4. Manual-input monitor LIVE on the Alienware plus the live check that injected keys are not seen by it.
 5. The owner's explicit live trial.
 
 ## Dependencies (isolated venv only)
@@ -107,21 +107,41 @@ not a D-Bus method. Now: the owner installs the package in `kwin_script/aion2ass
 and any error there makes focus unavailable (controller fails closed). Package metadata/layout is unverified on a
 real Plasma 6 install. `window_match` is a substring test on the combined string.
 
-## Manual-input detection: UNKNOWN (hard no-enable gate)
-`provides_manual_input` is False and `Controller` refuses to enable (`enable_refused:no_manual_input_signal`). Nothing
-substitutes for it. What would be required: a user-session API that delivers *global* keyboard/mouse events of the
-owner while another app has focus. None exists among the approved ones: RemoteDesktop/libei is output-only;
-GlobalShortcuts fires only for shortcuts we register (and grabbing the game binds would swallow them);
-InputCapture portal captures input only after a pointer-barrier activation and is for forwarding, not monitoring;
-KWin scripts expose no raw key stream. Candidates outside the approved set (not implemented, need owner decision):
-libinput/evdev reading (`input` group or root), or a compositor-side extension. Until such a signal exists, enable is
-impossible by design.
+## Manual-input detection (evdev, read-only) - owner-authorised
+Owner decision: the assist may read the owner's keyboard/mouse on the Alienware to know when to pause. User blizz is
+already in group `input` and `/dev/input/event*` are `crw-rw-rw- root:input`, so no permission change is made.
+`evdev_monitor.ManualInputMonitor` (stdlib `struct`, no extra dependency):
+- opens event nodes `O_RDONLY|O_NONBLOCK|O_CLOEXEC` only; never grabs a device, never writes to one, never creates a
+  virtual device (tests assert the flags, patch `os.write`/`fcntl.ioctl` to fail during operation, and scan the source
+  for those APIs);
+- selects devices from `/sys/class/input/event*/device/capabilities` (EV_KEY with letter/enter/space keys, or BTN_LEFT);
+  virtual devices are excluded by default (`include_virtual`); rescans every 2 s for hot-plug;
+- counts EV_KEY press/release/repeat of keys and mouse buttons (not gamepad/touch-tool codes) and keeps ONLY the count,
+  never key codes, so it is not a keylogger; `MonitoredOwnerInput` turns a count into the `manual` edge, so the controller
+  pauses on the very next tick for `manual_pause_ms`;
+- reports UNKNOWN (and enable is refused / a running assist is disabled with `signal_lost:...`, keys released) when no
+  keyboard device is readable, the thread dies, or the loop stalls (> `stall_s`).
+Enable requires BOTH signals live: focus (KWin script reporting) and manual input (monitor LIVE).
+Things the owner must set: the evdev codes of the assist's own toggle/emergency/hold hotkeys go in `ignore_codes`
+(otherwise pressing them counts as manual play and pauses the assist).
+**Live-verification gate (cannot be checked offline):** the assumption that the assist's injected keys (portal/libei into
+KWin) never appear on a `/dev/input` node. `startup_self_check` sends nothing, confirms the monitor is live and that the
+assist emitted no key during an idle window, and reports (without blaming the assist) any owner input seen; it returns
+`live_verified=False` always. If the assumption is wrong the assist would pause itself (the fail-safe direction).
+
+## Binds
+The AION2 files on the Alienware (`Saved_Steam/Config/Windows`: Input.ini and EnhancedInput.ini are 2 bytes,
+GameUserSettings.ini has no keys) do not hold skill binds (likely server-side), so none are invented.
+`python3 -m aion2_assist binds template binds.json --profile profile.json` writes every calibrated slot position with a
+blank key/role and `enabled: false`; fill it in, then `binds validate binds.json [--profile profile.json]` refuses
+blank/UNSET keys, names that are not real pressable keys (digits, letters, F1-F12, TAB, SPACE, GRAVE, MINUS, EQUAL;
+no chords), duplicates, bad roles, unknown slots and a profile-hash mismatch. `check-config` applies the same key rule.
 
 ## Remaining blockers (exact)
-1. Manual-input signal: UNKNOWN, no approved API (above). Hard gate.
-2. Real-bus behaviour of `JeepneyTransport`, `gst-launch-1.0` availability/latency on the Alienware, and the KWin
-   script package + `isScriptLoaded`: none verifiable offline.
-3. Real calibration, real skill/bind config, `window_match` value (all owner inputs).
+1. Live verification that injected keys are invisible to `/dev/input` (self-check cannot prove it offline).
+2. Real-bus behaviour of `JeepneyTransport`, `gst-launch-1.0` availability/latency on the Alienware, the KWin script
+   package and `isScriptLoaded`: none verifiable offline.
+3. Owner inputs: real calibration, the filled-in binds/config, `window_match`, `ignore_codes` for the control hotkeys.
 
 ## Cannot be verified offline
 Whether Proton/XWayland accepts portal (libei) keyboard input; NC detection behaviour; real capture latency and

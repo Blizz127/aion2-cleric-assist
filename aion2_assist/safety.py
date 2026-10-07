@@ -89,6 +89,12 @@ class Controller:
                 self.pending.clear()
             else:
                 self.sink.release_all()
+        if self.enabled:  # a required safety signal went away (e.g. monitor thread died): disable at once
+            lost = self.refusal()
+            if lost:
+                self.enabled = False
+                self.sink.release_all()
+                return self._sup(now, f"signal_lost:{lost}")
         if st.manual:
             self.pause_until = now + cfg.manual_pause_ms / 1000.0
         if not self.enabled:

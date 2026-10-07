@@ -164,17 +164,8 @@ class PortalScreenCastSource(FrameSource):
 
 
 # ---- RemoteDesktop input (keyboard only) ----------------------------------------
-def _keycodes():
-    k = {str(d): 2 + (d - 1) for d in range(1, 10)}
-    k["0"] = 11
-    for row, base in (("qwertyuiop", 16), ("asdfghjkl", 30), ("zxcvbnm", 44)):
-        k.update({c: base + i for i, c in enumerate(row)})
-    k.update({f"F{i}": 58 + i for i in range(1, 11)})
-    k.update({"F11": 87, "F12": 88})
-    return k
+from .keys import KEYCODES as EVDEV_KEYCODES  # noqa: E402
 
-
-EVDEV_KEYCODES = _keycodes()  # Linux input-event-codes.h values for standard keys
 DEVICE_KEYBOARD, DEVICE_POINTER = 1, 2
 
 

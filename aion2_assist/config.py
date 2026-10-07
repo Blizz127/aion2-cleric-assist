@@ -3,6 +3,8 @@ import json
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from .keys import normalize_key
+
 ROLES = ("heal", "hot", "shield", "dmg", "buff")
 UPKEEP_ROLES = ("hot", "shield", "buff")
 
@@ -61,6 +63,8 @@ class Config:
         slots = {}
         for sid, s in raw.items():
             s = {k: v for k, v in s.items() if not k.startswith("_")}
+            if "key" in s:
+                s["key"] = normalize_key(s["key"]) or s["key"]  # invalid names are rejected by validate_for_run
             try:
                 slot = SlotCfg(id=sid, **s)
             except TypeError as e:
@@ -98,6 +102,9 @@ class Config:
         bad = [s.id for s in self.enabled_slots() if not s.key or s.key.upper().startswith("UNSET")]
         if bad:
             raise ConfigError(f"placeholder/empty keys for enabled slots: {bad}")
+        bad = [f"{s.id}={s.key!r}" for s in self.enabled_slots() if normalize_key(s.key) is None]
+        if bad:
+            raise ConfigError(f"not real key names: {bad}")
         if not self.enabled_slots():
             raise ConfigError("no enabled slots")
 
