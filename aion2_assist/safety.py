@@ -77,6 +77,7 @@ class Controller:
         self.last_tick = now
         if st.emergency:
             self.enabled = False
+            self.sink.release_all()
             return self._sup(now, "emergency_stop")
         if st.toggle:
             why = self.refusal() if not self.enabled else None

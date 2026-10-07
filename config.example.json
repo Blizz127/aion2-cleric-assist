@@ -1,0 +1,16 @@
+{
+  "_comment": "PLACEHOLDERS ONLY. Skill names/keys are NOT known yet. Keys starting with UNSET are refused at run time. Set enabled=false for level-locked slots.",
+  "window_match": "AION2",
+  "hp_max": 318, "mp_max": 1605,
+  "emergency_hp": 0.35, "safe_hp": 0.60, "hot_hp": 0.90,
+  "predict_horizon_s": 1.0, "ewma_alpha": 0.5, "hp_samples": 6, "min_confidence": 0.7,
+  "mode": "hold", "max_stale_ms": 250, "manual_pause_ms": 1500, "max_keys_per_sec": 4,
+  "watchdog_ms": 500, "desync_n": 3, "response_ms": 1500,
+  "slots": {
+    "slot1": {"key": "UNSET_1", "role": "heal",   "cooldown": 6, "cast": 1.5, "gcd": 1.0, "mp_cost": 0, "priority": 10},
+    "slot2": {"key": "UNSET_2", "role": "hot",    "cooldown": 8, "cast": 0,   "gcd": 1.0, "mp_cost": 0, "priority": 20, "duration": 12},
+    "slot3": {"key": "UNSET_3", "role": "shield", "cooldown": 20, "cast": 0,  "gcd": 1.0, "mp_cost": 0, "priority": 30, "duration": 8},
+    "slot4": {"key": "UNSET_4", "role": "dmg",    "cooldown": 3, "cast": 1.0,  "gcd": 1.0, "mp_cost": 0, "priority": 40},
+    "slot5": {"key": "UNSET_5", "role": "buff",   "cooldown": 60, "cast": 0,   "gcd": 0,   "mp_cost": 0, "priority": 50, "duration": 300, "enabled": false}
+  }
+}

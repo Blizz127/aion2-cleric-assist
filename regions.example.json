@@ -1,0 +1,9 @@
+{
+  "_comment": "Rectangles [x,y,w,h] are FULL-FRAME pixel coordinates of frame_size. Replace with measured values.",
+  "frame_size": [1920, 1080], "ui_scale": 1.0,
+  "regions": {
+    "anchor": [0, 0, 10, 10], "hp_bar": [0, 0, 10, 10], "mp_bar": [0, 0, 10, 10], "target": [0, 0, 10, 10],
+    "slots": {"slot1": [0, 0, 10, 10]},
+    "states": {"dialog": [0, 0, 10, 10], "loading": [0, 0, 10, 10], "death": [0, 0, 10, 10]}
+  }
+}
