@@ -125,13 +125,13 @@ class Controller:
         for name in ("hp", "mp"):
             if not valid_fraction(getattr(obs, name).value):
                 return self._sup(now, f"invalid_reading:{name}")
-        for name in ("state", "anchor", "hp", "mp"):
+        if not obs.anchor.value:  # (anchor confidence only describes a *present* anchor)
+            return self._sup(now, "anchor_missing")
+        for name in ("anchor", "state", "hp", "mp"):
             if getattr(obs, name).confidence < cfg.min_confidence:
                 return self._sup(now, f"low_confidence:{name}")
         if obs.state.value is not None:
             return self._sup(now, f"unsafe_state:{obs.state.value}")
-        if not obs.anchor.value:
-            return self._sup(now, "anchor_missing")
         self._check_responses(obs)
         if self.desync:
             return self._sup(now, "desync_latched", misses=self.misses)

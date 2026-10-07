@@ -93,11 +93,11 @@ class Decider:
         for name in ("hp", "mp"):
             if not valid_fraction(getattr(obs, name).value):
                 return Decision(NONE, f"invalid_reading:{name}")
+        if not obs.anchor.value:
+            return Decision(NONE, "anchor_missing")
         for name in ("hp", "mp", "state", "anchor"):
             if getattr(obs, name).confidence < c.min_confidence:
                 return Decision(NONE, f"low_confidence:{name}")
-        if not obs.anchor.value:
-            return Decision(NONE, "anchor_missing")
         if obs.state.value is not None:
             return Decision(NONE, f"unknown_state:{obs.state.value}")
         hp = obs.hp.value
