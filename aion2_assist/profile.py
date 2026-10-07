@@ -98,7 +98,7 @@ def build_profile(spec: dict, shots: Dict[str, Frame]) -> Profile:
     data = {"version": 1, "frame_size": list(size), "ui_scale": spec.get("ui_scale", 1.0),
             "regions": {**{k: list(v) for k, v in reg.items() if k not in ("slots", "states")},
                         "slots": {k: list(v) for k, v in reg["slots"].items()}, "states": regions_states},
-            "thresholds": {"anchor": 0.92, "state": 0.95, "bar_tol": 30, "target_gap": 0},
+            "thresholds": {"anchor": 0.92, "state": 0.95, "bar_tol": 30},
             "templates": t}
     data["hash"] = compute_hash(data)
     return Profile(data)
