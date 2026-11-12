@@ -189,6 +189,8 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd", required=True)
     from .workflow_cli import add_parser
     add_parser(sub)
+    from .capture import add_parser as add_capture_parser
+    add_capture_parser(sub)
     c = sub.add_parser("calibrate", help="build a profile from full-frame owner screenshots")
     c.add_argument("--regions", required=True)
     c.add_argument("--shot", action="append", required=True, metavar="NAME=PNG",

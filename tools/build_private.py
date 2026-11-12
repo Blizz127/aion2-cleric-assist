@@ -43,7 +43,8 @@ def main():
         env.pop("PYTHONPATH", None)
         checks = []
         for argv, expected in ((["--help"], 0), (["replay", "--demo", "--json"], 0),
-                               (["workflow", "demo"], 0), (["doctor"], 0),
+                               (["workflow", "demo"], 0), (["doctor"], 0), (["capture", "--help"], 0),
+                               (["capture", "--every", "0"], 2),
                                (["run", "--gates-file", str(stage / "NONEXISTENT-APPROVAL")], 2)):
             result = subprocess.run([sys.executable, "-m", "aion2_assist", *argv], cwd=stage, env=env,
                                     capture_output=True, text=True, timeout=30)

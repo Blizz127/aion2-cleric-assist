@@ -1,4 +1,8 @@
-# aion2-cleric-assist 0.2.0 (live behavior unverified)
+# aion2-cleric-assist 0.3.0 (live behavior unverified)
+
+> **Lane owner since 2026-11-12 14:51Z:** Claude session `claude-aion2-cleric-assist`. The owner reassigned the
+> lane in that session's terminal ("take it from the other repo please" / "and lets get it up and running to finish
+> the goal"). Codex task 6b52dbf3ae9f is parked. It should not write here unless the owner hands the lane back.
 
 Combat assistance and calibrated visual workflows for an Aion 2 Cleric on Bazzite/KDE Wayland
 (Steam appid 3393110, Proton). The full-game autonomy goal is **not complete**: the seven-stage
@@ -69,8 +73,29 @@ python3 tools/build_private.py --out dist
 ```
 Builds a versioned source archive with per-file and archive SHA-256 checksums and runs startup, combat replay,
 workflow demo and default-refusal smoke checks from an isolated staged copy. The build does not publish or
-start live adapters. No Aion launcher/private-server publishing destination is configured in this repository
-or its Devbox catalog entry; delivery through that channel is still blocked on a destination.
+start live adapters.
+
+## Getting it running on the Alienware
+Delivery goes to the owner's PC, where the game runs: `./deploy-alienware.sh` copies only this project's
+files to `alienware-bazzite:~/Projects/aion2-cleric-assist` (no `--delete`, so `config.json`, `profile.json`,
+approvals, journals and `shots/` there are never touched), byte-compiles them and runs the read-only `doctor`.
+`--setup-venv` creates `.venv` there and installs `requirements.txt` (jeepney). `--check` lists the files.
+First deploy: 2026-11-12 14:55Z, 0.2.0 on Python 3.14.8. All dependencies were present; workflow demo, replay
+demo and the `run` refusal behaved the same as on the devbox.
+
+**Calibration capture.** Real screenshots are the main blocker, so `capture` records them through the same
+ScreenCast + PipeWire path that `run` uses:
+```
+cd ~/Projects/aion2-cleric-assist && .venv/bin/python -m aion2_assist capture --every 3 --seconds 180
+```
+The portal asks which screen to share. Frames go to a new `shots/<UTC stamp>/` folder as lossless PNGs at the
+stream's native size. Nothing is scaled, so the pixels match the live reader. It opens no RemoteDesktop
+session and cannot send input. While it records, play normally and pass through these states:
+an enemy targeted with every slot ready, every slot on cooldown, no target, an ally targeted, low HP if it
+happens, an NPC dialog, a loading screen, a vendor buy and sell window, and the quest tracker. Then
+`calibrate`, `read` and the workflow `calibrate` run on the chosen frames (devbox or PC).
+Checked on the PC: every pipeline element exists, and a synthetic `videotestsrc` run through the same pipeline
+produced PNGs that the stdlib reader loads. The real screen-share path has not run yet.
 
 ## Architecture
 ```
