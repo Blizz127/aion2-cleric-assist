@@ -1,5 +1,6 @@
 """User-editable config (JSON, or TOML by extension). No skills/binds are invented here."""
 import json
+import math
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
@@ -61,10 +62,16 @@ class Config:
 
     @staticmethod
     def from_dict(d: dict) -> "Config":
+        if not isinstance(d, dict):
+            raise ConfigError("config must be an object")
         d = {k: v for k, v in d.items() if not k.startswith("_")}  # allow _comment keys
         raw = d.pop("slots", {})
+        if not isinstance(raw, dict):
+            raise ConfigError("slots must be an object")
         slots = {}
         for sid, s in raw.items():
+            if not isinstance(s, dict):
+                raise ConfigError(f"slot {sid}: must be an object")
             s = {k: v for k, v in s.items() if not k.startswith("_")}
             if "key" in s:
                 s["key"] = normalize_key(s["key"]) or s["key"]  # invalid names are rejected by validate_for_run
@@ -74,9 +81,9 @@ class Config:
                 raise ConfigError(f"slot {sid}: {e}")
             if slot.role not in ROLES:
                 raise ConfigError(f"slot {sid}: role must be one of {ROLES}")
-            if min(slot.cooldown, slot.cast, slot.gcd, slot.mp_cost, slot.duration) < 0:
-                raise ConfigError(f"slot {sid}: negative timing/cost")
             slots[sid] = slot
+        if not isinstance(d.get("ignore_codes", []), (list, tuple)):
+            raise ConfigError("ignore_codes must be a list")
         d["ignore_codes"] = tuple(d.get("ignore_codes", ()))
         d["explicit_keys"] = frozenset(d.keys()) - {"explicit_keys"}
         try:
@@ -87,6 +94,35 @@ class Config:
         return cfg
 
     def validate(self):
+        def number(name, value, minimum=0, strict=False):
+            if (isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
+                    or (value <= minimum if strict else value < minimum)):
+                raise ConfigError(f"{name} must be finite and {'>' if strict else '>='} {minimum}")
+
+        for name in ("hp_max", "mp_max", "max_stale_ms", "max_keys_per_sec", "watchdog_ms", "response_ms"):
+            number(name, getattr(self, name), strict=True)
+        for name in ("future_tolerance_ms", "manual_pause_ms", "predict_horizon_s"):
+            number(name, getattr(self, name))
+        for name in ("emergency_hp", "safe_hp", "hot_hp", "ewma_alpha", "min_confidence"):
+            value = getattr(self, name)
+            number(name, value)
+            if value > 1:
+                raise ConfigError(f"{name} must be <= 1")
+        for name, minimum in (("hp_samples", 2), ("desync_n", 1)):
+            value = getattr(self, name)
+            if type(value) is not int or value < minimum:
+                raise ConfigError(f"{name} must be an integer >= {minimum}")
+        if not isinstance(self.window_match, str) or not self.window_match.strip():
+            raise ConfigError("window_match must be nonempty")
+        for sid, slot in self.slots.items():
+            if not isinstance(slot.key, str) or type(slot.enabled) is not bool:
+                raise ConfigError(f"slot {sid}: key must be text and enabled must be boolean")
+            if slot.role not in ROLES:
+                raise ConfigError(f"slot {sid}: unknown role")
+            for name in ("cooldown", "cast", "gcd", "mp_cost", "duration"):
+                number(f"slot {sid}.{name}", getattr(slot, name))
+            if type(slot.priority) is not int:
+                raise ConfigError(f"slot {sid}: priority must be an integer")
         if self.mode not in ("hold", "toggle"):
             raise ConfigError("mode must be 'hold' or 'toggle'")
         if not 0 < self.emergency_hp < self.safe_hp <= 1:
@@ -106,6 +142,7 @@ class Config:
 
     def validate_for_run(self):
         """Extra guard: refuse placeholder binds (the real bar/binds are not known yet)."""
+        self.validate()
         bad = [s.id for s in self.enabled_slots() if not s.key or s.key.upper().startswith("UNSET")]
         if bad:
             raise ConfigError(f"placeholder/empty keys for enabled slots: {bad}")

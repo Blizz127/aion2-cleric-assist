@@ -1,5 +1,6 @@
 """Deterministic decision logic. No clock, no randomness: all time comes in as `now`."""
 from collections import deque
+import math
 from dataclasses import dataclass
 from typing import Optional
 
@@ -65,10 +66,10 @@ class Decider:
             return "mp"
         if s.role in SELF_ROLES:  # self-only heals: refuse when the target is unclear or an ally
             t = obs.target
-            if t.confidence < c.min_confidence or t.value not in ("enemy", "none"):
+            if not valid_fraction(t.confidence) or t.confidence < c.min_confidence or t.value not in ("enemy", "none"):
                 return "heal_target_unclear"
         r = obs.slots.get(s.id)
-        if r is None or r.confidence < c.min_confidence:
+        if r is None or not valid_fraction(r.confidence) or r.confidence < c.min_confidence:
             return "slot_uncertain"
         if r.value != "ready":
             return "observed_cooldown"  # cross-check: config says ready, screen says no
@@ -85,6 +86,8 @@ class Decider:
     # ---- decide ------------------------------------------------------
     def decide(self, obs: Observation, now: float) -> Decision:
         c = self.cfg
+        if not math.isfinite(now) or not math.isfinite(obs.ts):
+            return Decision(NONE, "invalid_timestamp")
         age_ms = (now - obs.ts) * 1000
         if age_ms > c.max_stale_ms:
             return Decision(NONE, "stale_observation")
@@ -96,7 +99,7 @@ class Decider:
         if not obs.anchor.value:
             return Decision(NONE, "anchor_missing")
         for name in ("hp", "mp", "state", "anchor"):
-            if getattr(obs, name).confidence < c.min_confidence:
+            if not valid_fraction(getattr(obs, name).confidence) or getattr(obs, name).confidence < c.min_confidence:
                 return Decision(NONE, f"low_confidence:{name}")
         if obs.state.value is not None:
             return Decision(NONE, f"unknown_state:{obs.state.value}")
@@ -115,7 +118,7 @@ class Decider:
             return Decision(s.id, f"upkeep:{s.role}")
         if hp < c.safe_hp or pred < c.emergency_hp:
             return Decision(NONE, "unsafe_for_damage:hp")
-        if not (obs.target.confidence >= c.min_confidence and obs.target.value == "enemy"):
+        if not (valid_fraction(obs.target.confidence) and obs.target.confidence >= c.min_confidence and obs.target.value == "enemy"):
             return Decision(NONE, "no_target")
         heal_costs = [x.mp_cost for x in c.enabled_slots() if x.role == "heal"]
         reserve = min(heal_costs) if heal_costs else 0.0

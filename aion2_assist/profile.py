@@ -1,6 +1,7 @@
 """Calibration profile: frame size, UI scale, regions, reference templates, hash."""
 import hashlib
 import json
+import math
 from typing import Dict
 
 from .frame import Frame, dist, mean_rgb, mean_vs
@@ -23,11 +24,70 @@ def compute_hash(d: dict) -> str:
 
 class Profile:
     def __init__(self, data: dict):
+        if not isinstance(data, dict):
+            raise ProfileMismatch("profile must be an object")
         self.data = data
         if data.get("hash") != compute_hash(data):
             raise ProfileMismatch("profile hash does not match its contents (edited or corrupt)")
+        try:
+            self._validate(data)
+        except (KeyError, TypeError, ValueError, AttributeError) as e:
+            raise ProfileMismatch(f"invalid calibration profile: {e}") from e
         self.frame_size = tuple(data["frame_size"])
         self.hash = data["hash"]
+
+    @staticmethod
+    def _validate(d):
+        def numeric(v, low, high):
+            if type(v) not in (int, float) or not math.isfinite(v) or not low <= v <= high:
+                raise ValueError(f"calibration number must be finite in [{low},{high}]")
+
+        def vector(v, count):
+            if not isinstance(v, list) or len(v) != count:
+                raise ValueError("calibration vector length mismatch")
+            for n in v:
+                numeric(n, 0, 255)
+
+        if d["version"] != 1:
+            raise ValueError("unsupported profile version")
+        size = d["frame_size"]
+        if not isinstance(size, list) or len(size) != 2 or any(type(v) is not int or v < 1 for v in size):
+            raise ValueError("invalid frame_size")
+        numeric(d["ui_scale"], 0.01, 100)
+        thresholds, regions, templates = d["thresholds"], d["regions"], d["templates"]
+        numeric(thresholds["anchor"], 0.7, 1)
+        numeric(thresholds["state"], 0.7, 1)
+        numeric(thresholds["bar_tol"], 0, 255)
+        def rect(r):
+            if (not isinstance(r, list) or len(r) != 4 or any(type(v) is not int for v in r)
+                    or min(r[:2]) < 0 or min(r[2:]) < 1 or r[0]+r[2] > size[0] or r[1]+r[3] > size[1]):
+                raise ValueError("invalid full-frame rectangle")
+            return r[2]*r[3]*3
+        for key in ("anchor", "hp_bar", "mp_bar", "target"):
+            rect(regions[key])
+        vector(templates["anchor"], rect(regions["anchor"]))
+        vector(templates["hp_color"], 3)
+        vector(templates["mp_color"], 3)
+        targets = templates["target"]
+        if not {"enemy", "none"} <= targets.keys() or not targets.keys() <= {"enemy", "none", "friendly"}:
+            raise ValueError("invalid target references")
+        for v in targets.values():
+            vector(v, 3)
+        _check_gaps("target", targets)
+        for group in ("slots", "states"):
+            if set(regions[group]) != set(templates[group]):
+                raise ValueError(f"{group} regions/templates differ")
+            for name, r in regions[group].items():
+                count = rect(r)
+                t = templates[group][name]
+                if group == "states":
+                    vector(t, count)
+                else:
+                    if set(t) != {"ready", "cooldown"}:
+                        raise ValueError("invalid slot references")
+                    for v in t.values():
+                        vector(v, 2)
+                    _check_gaps(name, t)
 
     def __getitem__(self, k):
         return self.data[k]

@@ -326,7 +326,7 @@ class RefusalGates(unittest.TestCase):
                          {"config_valid", "profile_hash_pinned_and_matches", "window_match_set", "ignore_codes_set"})
         self.assertEqual(self.missing(config={"slots": {"s4": {"key": "CTRL+4", "role": "dmg"}}}) & {"config_valid"}, {"config_valid"})
         c = {"window_match": ""}
-        self.assertEqual(self.missing(config=c), {"window_match_set"})
+        self.assertEqual(self.missing(config=c), {"config_valid", "profile_hash_pinned_and_matches", "window_match_set", "ignore_codes_set"})
         self.assertEqual(self.missing(config={"ignore_codes": []}), {"ignore_codes_set"})
         self.assertEqual(self.missing(config={"profile_hash": "0" * 64}), {"profile_hash_pinned_and_matches"})
 

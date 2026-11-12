@@ -1,12 +1,76 @@
-# aion2-cleric-assist (OFFLINE prototype)
+# aion2-cleric-assist 0.2.0 (live behavior unverified)
 
-Solo auto-cast assist for an Aion 2 Cleric on Bazzite/KDE Wayland (Steam appid 3393110, Proton).
+Combat assistance and calibrated visual workflows for an Aion 2 Cleric on Bazzite/KDE Wayland
+(Steam appid 3393110, Proton). The full-game autonomy goal is **not complete**: the seven-stage
+quest/navigation/combat/loot/turn-in/buy/sell demonstration is synthetic, and no real route or merchant
+has been calibrated or verified.
 
 ## OFFLINE ONLY. Live use risks an NC "Integrated Account Ban".
-Nothing here has been run against the game, the portals, or the network. The owner has accepted the
-account-ban risk for any future live trial; that trial is still an explicit, separate step. There is no `run`
-command, no live adapter that can start (the real transport exists only as source tested against a fake connection), and the controller starts
-**OFF**. Core is stdlib Python 3.12 (numpy/PIL not installed; minimal PNG reader). Optional venv dep: jeepney (below).
+No live game/portal trial has been performed. The owner has accepted the account-ban risk for any future
+live trial; the existing explicit trial and native permission gates remain. `run` wires the real adapters,
+refuses missing prerequisites, and starts the controller **OFF**. Core is stdlib Python 3.12
+(minimal PNG reader); optional live dependency: jeepney (below).
+
+## Visual workflows and current evidence
+```
+python3 -m aion2_assist workflow demo
+python3 -m aion2_assist doctor
+python3 -m aion2_assist workflow calibrate --spec workflow-spec.json --profile profile.json --out workflow.json
+python3 -m aion2_assist workflow validate --recipe workflow.json --profile profile.json
+python3 -m aion2_assist workflow replay --recipe workflow.json --profile profile.json --config config.json --frames shots --dt 0.3
+```
+`workflow demo` runs a synthetic feedback world through the same Controller used by the live orchestrator.
+It completes seven stages and emits eight mock keys: `q,w,1,4,f,q,b,s` (the `1` is an emergency heal).
+These keys, UI patterns, item names, quantities and prices are **demo data, not Aion bindings or game knowledge**.
+`doctor` only reads local configuration and executable availability; it opens no bus, portal or input device.
+
+A workflow spec contains `budget`, `checkpoints` and ordered `steps`. Each checkpoint names a full-frame
+positive PNG (`image`), a full-frame negative PNG (`absent`), a `(x,y,w,h)` `rect`, a `threshold` (0.9–1),
+and `state` (`null` or `"dialog"`). Image paths resolve relative to the spec. Calibration embeds the pixels,
+verifies that the negative example is separated from the positive, and pins the combat profile hash.
+Existing output files are refused. Checkpoint rectangles must capture the distinctive condition being tested.
+
+Each step has a unique `id`, `kind` (`navigate`, `quest`, `loot`, `buy`, `sell`, `combat`, `wait`),
+`before`/`after` checkpoint names and a finite `timeout_s` (0.1–3600). Noncombat actions also specify one real
+`key`; it is a single short press. Combat stages use the existing skill decider. A missing checkpoint waits;
+an expired step blocks. An action is never considered successful merely because input was sent: its postcondition
+must have been absent before dispatch and present on two distinct subsequent frames. Ambiguous checkpoints block.
+Only the active step's recognized dialog can produce a workflow key; combat stays suppressed in dialogs.
+Freshness, focus, manual activity, hold/toggle, emergency stop, HP, rate and casting checks still apply.
+
+Buy/sell steps also declare `trade: {"item":"...", "quantity":1, "total":5, "currency":"in_game"}`.
+Sales require `"protected": false`; purchase totals must fit the recipe's budget. Both trade checkpoint
+thresholds must be exactly `1` to avoid approximate digit/item matches. The before rectangle must include the
+selected item, quantity and total; the after rectangle must show an inventory/balance receipt that changes.
+These are explicit recipe declarations and pixel checks, **not OCR, live price discovery, inventory classification,
+or automatic protection detection**. Premium currency and real-money trade declarations are refused.
+
+Navigation currently means calibrated key-driven transitions. There is no map pathfinder, continuous movement,
+mouse targeting, general quest understanding or automatic recovery from arbitrary terrain/UI states. New routes
+need real screenshots, binds and outcome checks. Low-HP healing can preempt a normal-world stage; unknown states,
+enemy targets outside the combat stage, and ambiguous vendor results stop workflow inputs.
+
+The optional live path is `run ... --workflow workflow.json --workflow-journal progress.jsonl`.
+It requires the workflow's hash **in addition to** the combat profile hash in the existing approval file.
+Only the owner performs `approve --profile profile.json --workflow workflow.json --i-accept-live-risk`;
+this command backs up an existing approval before replacing it. It does not satisfy native portal consent or
+the outstanding target verification. No approvals are created by replay, doctor or build commands.
+
+Live workflow progress uses an exclusive journal lock and fsyncs dispatch intent **before** sending input.
+Confirmed steps and reserved purchase totals survive restart. An unresolved dispatch or malformed journal
+refuses continuation; it never retries an uncertain purchase or sale. Preserve the journal for reconciliation:
+deleting it or choosing another journal deliberately starts a new run and loses duplicate-action protection.
+Workflow completion/blocked outcomes stop the live orchestrator and release inputs. Replay returns 0 only for
+confirmed completion, 4 for incomplete/blocked execution, and 2 for invalid inputs.
+
+## Private build artifact
+```
+python3 tools/build_private.py --out dist
+```
+Builds a versioned source archive with per-file and archive SHA-256 checksums and runs startup, combat replay,
+workflow demo and default-refusal smoke checks from an isolated staged copy. The build does not publish or
+start live adapters. No Aion launcher/private-server publishing destination is configured in this repository
+or its Devbox catalog entry; delivery through that channel is still blocked on a destination.
 
 ## Architecture
 ```
@@ -91,7 +155,7 @@ test module is skipped. No global/--user installs.
   or auto-accepted; a `Session.Closed` stops capture/input/hotkeys (fail closed). GlobalShortcuts: CreateSession,
   BindShortcuts (toggle/emergency/hold; triggers are only *preferred*, the user confirms in the portal UI),
   Activated/Deactivated signals.
-- No `run` command exists; nothing starts any of this.
+- `run` selects these adapters only after static live gates pass; all automated verification uses fakes.
 
 ## Focus (KWin) - corrected design
 Earlier draft assumed D-Bus `loadScript`/`run`/`unloadScript` on `/Scripting`; those are NOT in the KWin docs
@@ -195,3 +259,8 @@ timestamps (`max_stale_ms` 250 is a guess); real cast/GCD/cooldown timings and H
 `desync_n`); HUD variance (scaling, effects, transparency, dialogs over the HUD, cooldown-sweep rendering, buff
 icons); whether a heal with an enemy targeted still lands on self; actual window class/title; GlobalShortcuts hold
 semantics with the real keys; KWin scripting API differences between Plasma versions.
+
+
+## STANDING OWNER INSTRUCTION (Blizz 12:27 AM CST Nov 12 2026)
+
+"Here’s what I want you to do: proceed autonomously until you’ve finished this Aion 2 PRoject as 100% automated, includes qusets and combat buying selling etc. 7t. I want you to monitor your own progress and evaluate whether the result aligns with what’s expected. Feel free to consult any sources you need [solution specific details and past tries] I want you to assess everything and implement the necessary changes, you have full authority to correct or alter anything that’s already been done. Keep in mind that we have specific needs feel free to rework that system if you deem it necessary. Organize your work however you see fit, investigate, reinvent, and innovate. You have the freedom to do all of this, and to create any tools or algorithms required to reach the goal. Get started"

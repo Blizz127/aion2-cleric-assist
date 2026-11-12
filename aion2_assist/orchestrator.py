@@ -81,7 +81,8 @@ class Watchdog:
 
 class Orchestrator:
     def __init__(self, cfg: Config, profile: Profile, factories: Factories, log=None, tick_s=0.05,
-                 self_check_s=1.0, monitor_wait_s=3.0, watchdog=True, watchdog_timeout_s=1.0, watchdog_hard_s=2.0, hard_exit=os._exit):
+                 self_check_s=1.0, monitor_wait_s=3.0, watchdog=True, watchdog_timeout_s=1.0, watchdog_hard_s=2.0, hard_exit=os._exit,
+                 workflow=None):
         self.cfg, self.profile, self.f = cfg, profile, factories
         self.clock, self.sleep = factories.clock, factories.sleep
         self.log = log or (lambda rec: None)
@@ -96,6 +97,7 @@ class Orchestrator:
         self.reader = self.capture = self.sink = self.ctl = self.wd = None
         self._torn_down = False
         self.self_check = None
+        self.workflow = workflow
 
     def _event(self, name, **kw):
         self.log({"t": round(self.clock(), 4), "event": "lifecycle", "reason": name, **kw})
@@ -124,7 +126,8 @@ class Orchestrator:
         self.capture.open()                       # portal consent UI (owner)
         self.sink = PortalRemoteDesktopSink(self.transport, sleep=self.sleep)  # keyboard only
         self.sink.open()                          # portal consent UI (owner)
-        self.ctl = Controller(cfg, self.profile, self.capture, self.focus, self.sink, self.owner, self.clock, self.log)
+        self.ctl = Controller(cfg, self.profile, self.capture, self.focus, self.sink, self.owner, self.clock, self.log,
+                              workflow=self.workflow)
         sc = startup_self_check(self.monitor, self.sink, self.sleep, self.self_check_s)
         self.self_check = sc
         if not sc.ok:
@@ -164,6 +167,8 @@ class Orchestrator:
                     self.request_stop(f"portal_session_closed:{closed}")
                     break
                 rec = self.ctl.tick()
+                if self.workflow and (self.workflow.complete or self.workflow.blocked):
+                    self.request_stop("workflow_complete" if self.workflow.complete else "workflow_blocked:" + self.workflow.blocked)
                 faults = faults + 1 if rec.get("reason") == "exception_fail_closed" else 0
                 if faults >= 3:
                     self.request_stop("repeated_exceptions")
@@ -242,13 +247,39 @@ def live_main(args, factories: Optional[Factories] = None, out=print, err=None) 
     import sys
     err = err or (lambda m: print(m, file=sys.stderr))
     gates, cfg, prof = gates_mod.evaluate_static(args.i_accept_live_risk, args.config, args.profile, args.gates_file)
+    recipe = None
+    if getattr(args, "workflow", None):
+        from .workflow import load_workflow
+        try:
+            if prof is None:
+                raise ValueError("workflow requires a valid combat profile")
+            recipe = load_workflow(args.workflow, prof)
+            ok, why = gates_mod.read_gates_file(args.gates_file, recipe.hash)
+            gates.append(gates_mod.Gate("workflow_explicit_approval", ok, why))
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            gates.append(gates_mod.Gate("workflow_valid", False, str(e)))
+        gates.append(gates_mod.Gate("workflow_journal_set", bool(getattr(args, "workflow_journal", None)),
+                                   "--workflow-journal is required to prevent duplicate actions after restart"))
+    import math
+    timing_ok = (math.isfinite(args.tick_ms) and 0 < args.tick_ms <= 250
+                 and math.isfinite(args.self_check_s) and args.self_check_s > 0)
+    gates.append(gates_mod.Gate("runtime_timing", timing_ok, "tick-ms must be in (0,250]; self-check-s must be positive and finite"))
     if any(not g.ok for g in gates):
         gates.append(gates_mod.not_attempted_self_check())
         err(gates_mod.report(gates))
         return 2
-    orch = Orchestrator(cfg, prof, factories or real_factories(), log=json_logger(), tick_s=args.tick_ms / 1000.0,
-                        self_check_s=args.self_check_s)
+    journal = None
     try:
+        runner = None
+        if recipe:
+            from .workflow import Journal, WorkflowRunner
+            journal = Journal(recipe, os.path.expanduser(args.workflow_journal))
+            runner = WorkflowRunner(recipe, journal)
+            if runner.blocked or runner.complete:
+                err(f"workflow cannot start: {runner.blocked or 'already complete'}")
+                return 2
+        orch = Orchestrator(cfg, prof, factories or real_factories(), log=json_logger(), tick_s=args.tick_ms / 1000.0,
+                            self_check_s=args.self_check_s, workflow=runner)
         reason = orch.run()
     except StartupRefused as e:
         err(f"REFUSING TO START: 1 gate(s) missing\n  [MISSING] {e.gate}: {e.why}" if e.gate == "self_check"
@@ -257,5 +288,8 @@ def live_main(args, factories: Optional[Factories] = None, out=print, err=None) 
     except Exception as e:
         err(f"startup/run failed: {type(e).__name__}: {e}")
         return 3
+    finally:
+        if journal:
+            journal.close()
     out(f"stopped: {reason}")
-    return 0
+    return 4 if reason and reason.startswith("workflow_blocked:") else 0

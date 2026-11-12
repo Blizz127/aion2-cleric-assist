@@ -19,11 +19,11 @@ class FakeClock:
         return self.t
 
 
-def run_frames(cfg, profile, steps, dt=0.1, hold=True, log=None):
+def run_frames(cfg, profile, steps, dt=0.1, hold=True, log=None, workflow=None):
     """steps: iterable of (frame_factory(ts) -> Frame, ctl_names, hold_or_None, age_s).
     Returns (sink, records). The frame timestamp is the fake clock minus age (default fresh)."""
     clock, sink, owner, src = FakeClock(), MockSink(), MockOwnerInput(), MockFrameSource()
-    ctl = Controller(cfg, profile, src, MockFocus(), sink, owner, clock, log)
+    ctl = Controller(cfg, profile, src, MockFocus(), sink, owner, clock, log, workflow=workflow)
     recs = []
     for i, (factory, ctl_names, h, age) in enumerate(steps):
         clock.t = round(i * dt, 6)

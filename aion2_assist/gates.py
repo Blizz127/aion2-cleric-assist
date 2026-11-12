@@ -26,7 +26,8 @@ def read_gates_file(path: str, profile_hash: str):
         return False, f"{p} does not exist (owner creates it: `aion2_assist approve ...` or write the profile hash into it)"
     if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid() or st.st_mode & 0o022:
         return False, f"{p} must be a regular file owned by you and not group/world-writable"
-    lines = [l.split("#")[0].strip() for l in open(p).read().splitlines()]
+    with open(p) as f:
+        lines = [l.split("#")[0].strip() for l in f.read().splitlines()]
     if profile_hash not in lines:
         return False, f"{p} does not contain this profile's hash {profile_hash[:12]}... (profile changed since approval?)"
     return True, ""

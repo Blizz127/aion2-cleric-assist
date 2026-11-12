@@ -1,4 +1,4 @@
-"""CLI (offline tools only). There is deliberately no `run` command: live use is not wired up."""
+"""Offline calibration/replay and explicitly gated live combat/workflow execution."""
 import argparse
 import dataclasses
 import json
@@ -134,11 +134,35 @@ def cmd_approve(a):
         print("approve refused: pass --i-accept-live-risk", file=sys.stderr)
         return 2
     prof = load_profile(a.profile)
+    hashes = [prof.hash]
+    if getattr(a, "workflow", None):
+        from .workflow import load_workflow
+        hashes.append(load_workflow(a.workflow, prof).hash)
     path = os.path.expanduser(a.gates_file)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as f:
-        f.write(f"# owner approval for live trial of profile\n{prof.hash}\n")
+    parent = os.path.dirname(os.path.abspath(path))
+    os.makedirs(parent, exist_ok=True)
+    import shutil
+    import stat
+    import tempfile
+    import uuid
+    if os.path.lexists(path):
+        st = os.lstat(path)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid() or st.st_mode & 0o022:
+            print("approve refused: existing approval must be a private owner-controlled regular file", file=sys.stderr)
+            return 2
+        backup = path + ".bak-" + uuid.uuid4().hex
+        shutil.copy2(path, backup)
+        print(f"previous approval backed up to {backup}")
+    fd, temporary = tempfile.mkstemp(prefix=".approval-", dir=parent)
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write("# owner approval for live trial of profile and optional workflow\n" + "\n".join(hashes) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
     print(f"approved profile {prof.hash[:12]}... in {path}")
     return 0
 
@@ -163,6 +187,8 @@ def cmd_binds(a):
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="aion2_assist", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
+    from .workflow_cli import add_parser
+    add_parser(sub)
     c = sub.add_parser("calibrate", help="build a profile from full-frame owner screenshots")
     c.add_argument("--regions", required=True)
     c.add_argument("--shot", action="append", required=True, metavar="NAME=PNG",
@@ -177,6 +203,13 @@ def main(argv=None):
     k.add_argument("--config", required=True)
     k.set_defaults(fn=cmd_check_config)
     from .gates import DEFAULT_GATES_FILE
+    doctor = sub.add_parser("doctor", help="read-only local readiness report; no device/bus access")
+    doctor.add_argument("--config")
+    doctor.add_argument("--profile")
+    doctor.add_argument("--workflow")
+    doctor.add_argument("--gates-file", default=DEFAULT_GATES_FILE)
+    from .doctor import main as doctor_main
+    doctor.set_defaults(fn=doctor_main)
     run = sub.add_parser("run", help="LIVE session (default-refusing: lists every missing gate and exits 2)",
                          description="Starts the live assist only if ALL gates pass: --i-accept-live-risk, valid config "
                                      "(no UNSET keys), profile whose hash is pinned in the config, explicit window_match, "
@@ -189,9 +222,12 @@ def main(argv=None):
     run.add_argument("--gates-file", default=DEFAULT_GATES_FILE, help="owner approval file (default: %(default)s)")
     run.add_argument("--tick-ms", type=float, default=50.0)
     run.add_argument("--self-check-s", type=float, default=1.0)
+    run.add_argument("--workflow", help="calibrated workflow; its hash also needs explicit live approval")
+    run.add_argument("--workflow-journal", help="durable progress journal (required with --workflow)")
     run.set_defaults(fn=cmd_run)
     ap_ = sub.add_parser("approve", help="OWNER ONLY: write the profile hash into the gates file")
     ap_.add_argument("--profile", required=True)
+    ap_.add_argument("--workflow", help="also approve this specific calibrated workflow hash")
     ap_.add_argument("--i-accept-live-risk", action="store_true")
     ap_.add_argument("--gates-file", default=DEFAULT_GATES_FILE)
     ap_.set_defaults(fn=cmd_approve)

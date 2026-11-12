@@ -30,7 +30,7 @@ def read_bar(frame: Frame, rect, color, tol) -> Reading:
 
 
 def valid_fraction(x) -> bool:
-    return isinstance(x, (int, float)) and math.isfinite(x) and 0.0 <= x <= 1.0
+    return not isinstance(x, bool) and isinstance(x, (int, float)) and math.isfinite(x) and 0.0 <= x <= 1.0
 
 
 def classifyn(stat, refs: dict):
