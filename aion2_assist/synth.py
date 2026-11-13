@@ -26,8 +26,10 @@ def _fill(buf, rect, color):
 
 
 def make_frame(ts, hp=1.0, mp=1.0, target="enemy", cooldown=(), state=None, anchor=True, size=(W, H),
-               mp_stray=False, hp_stray=False):
-    """Render a synthetic HUD. `cooldown` = slot ids shown desaturated/dark."""
+               mp_stray=False, hp_stray=False, bar_fill=None):
+    """Render a synthetic HUD. `cooldown` = slot ids shown desaturated/dark.
+    `bar_fill` = {"hp"/"mp": "right"} draws that bar anchored at its right end (default: left)."""
+    fills = bar_fill or {}
     w, h = size
     buf = [bytearray(bytes(BG) * w) for _ in range(h)]
     r = REGIONS["regions"]
@@ -36,14 +38,15 @@ def make_frame(ts, hp=1.0, mp=1.0, target="enemy", cooldown=(), state=None, anch
         for yy in range(y, y + ah):
             for xx in range(x, x + aw):
                 buf[yy][3 * xx:3 * xx + 3] = bytes(((xx * 13 + yy * 7) % 200 + 40, (xx * 5) % 200 + 40, (yy * 29) % 200 + 40))
-    for name, color, val, stray in (("hp_bar", HP_C, hp, hp_stray), ("mp_bar", MP_C, mp, mp_stray)):
-        x, y, bw, bh = r[name]
+    for bar, color, val, stray in (("hp", HP_C, hp, hp_stray), ("mp", MP_C, mp, mp_stray)):
+        x, y, bw, bh = r[f"{bar}_bar"]
+        right = fills.get(bar, "left") == "right"
         n = max(0, min(bw, round(bw * val))) if val == val else 0
         _fill(buf, (x, y, bw, bh), (60, 60, 60))
         if n:
-            _fill(buf, (x, y, n, bh), color)
+            _fill(buf, (x + bw - n if right else x, y, n, bh), color)
         if stray:  # coloured chunk after a gap: ambiguous bar
-            _fill(buf, (x + bw - 40, y, 30, bh), color)
+            _fill(buf, (x + 10 if right else x + bw - 40, y, 30, bh), color)
     _fill(buf, tuple(r["target"]), TARGET_C[target])
     for i, (sid, rect) in enumerate(r["slots"].items()):
         c = SLOT_HUES[i]

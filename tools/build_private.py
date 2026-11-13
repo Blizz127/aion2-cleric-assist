@@ -34,7 +34,8 @@ def main():
         stage.mkdir()
         for item in ("aion2_assist", "kwin_script", "tests", "tools"):
             shutil.copytree(ROOT / item, stage / item, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.bak*"))
-        for item in ("README.md", "requirements.txt", "config.example.json", "regions.example.json"):
+        for item in ("README.md", "requirements.txt", "config.example.json", "regions.example.json",
+                     "config.alienware-draft.json", "regions.alienware-2560x1600.draft.json"):
             shutil.copy2(ROOT / item, stage / item)
         # Compile without generating caches or touching source files.
         for path in stage.rglob("*.py"):
@@ -45,6 +46,7 @@ def main():
         for argv, expected in ((["--help"], 0), (["replay", "--demo", "--json"], 0),
                                (["workflow", "demo"], 0), (["doctor"], 0), (["capture", "--help"], 0),
                                (["capture", "--every", "0"], 2),
+                               (["check-config", "--config", "config.alienware-draft.json"], 0),
                                (["run", "--gates-file", str(stage / "NONEXISTENT-APPROVAL")], 2)):
             result = subprocess.run([sys.executable, "-m", "aion2_assist", *argv], cwd=stage, env=env,
                                     capture_output=True, text=True, timeout=30)

@@ -1,0 +1,45 @@
+{
+  "_comment": "DRAFT, NOT CALIBRATED. calibrate refuses this file until 'target' is measured on a frame with an enemy targeted. Rectangles are full-frame [x, y, w, h] for a 2560x1600 frame.",
+  "_source": "Measured 2026-11-13 on one real AION 2 frame from the owner's earlier project (alienware-bazzite:~/Projects/aion2-cleric-macro/evidence/20261028T200516-level9-hotbar/full-20261028T200516.png, 2026-10-28 20:05 CDT, character level 9). That project captured the XWayland game window with ImageMagick `import -window`. A disconnect dialog dims the frame, so only geometry was taken from it: no colours, thresholds or templates.",
+  "_frame_size_assumption": "The ScreenCast stream is assumed to be the native 2560x1600 game frame. calibrate and the profile refuse any other size, so a wrong guess fails closed.",
+  "_verified_on_that_frame": [
+    "HP and MP fills occupy rows 1438-1454 and lean like parallelograms (1 px per row). The top two rows (1438-1439) carry no numbers, so the bar rects use only those rows.",
+    "The HP bar is anchored at its RIGHT end (against the centre emblem): at 1,072/1,954 HP (54.9%) the right 156 of 285 px were red. Hence bar_fill.hp = right.",
+    "The full MP bar is 285-286 px long (1,712/1,712 MP), the same length as the HP bar.",
+    "Skill icons occupy rows 1529-1584 at a pitch of about 62.7 px. The slot rects cover rows 1534-1565, which keeps the 'Lv. N' label at the bottom of each icon out."
+  ],
+  "_assumptions": [
+    "bar_fill.mp = left assumes the MP bar mirrors the HP bar (anchored at the emblem). The only frame has a full MP bar, so its direction is unverified.",
+    "The anchor is the upper part of the class emblem (the lyre). It leaves out the level number below it, which changes at every level-up, and the white shape at the bottom of the lyre.",
+    "Key positions come from the macro's live hotbar read (cleric_personal.json, 2026-10-28): 1-4 left group, 5-8 next group, then Q, E, left click, right click. The 2026-11-09 Skill window shows the same layout."
+  ],
+  "frame_size": [2560, 1600],
+  "ui_scale": 1.0,
+  "bar_fill": {"hp": "right", "mp": "left"},
+  "regions": {
+    "anchor": [1252, 1418, 52, 38],
+    "hp_bar": [947, 1438, 285, 2],
+    "mp_bar": [1328, 1438, 285, 2],
+    "slots": {
+      "bar_1": [905, 1534, 40, 32],
+      "bar_2": [968, 1534, 40, 32],
+      "bar_q": [1426, 1534, 40, 32],
+      "bar_e": [1488, 1534, 40, 32]
+    }
+  },
+  "_target": "Not set. The macro detected a target by cyan lock brackets around a red plate in the game world (screen centre area), not in a fixed HUD rectangle, and no available frame shows a target. Measure a rect on a frame with an enemy targeted, then add it as regions.target.",
+  "_slots_note": "regions.slots holds only slots that can all be on cooldown in one screenshot. calibrate refuses the whole profile if any slot looks the same ready and on cooldown. Move an entry from _excluded_slots into regions.slots once it qualifies.",
+  "_excluded_slots": {
+    "bar_3": {"rect": [1031, 1534, 40, 32], "why": "Radiant Recovery, locked until Lv 12 in the 2026-10-28 and 2026-11-09 frames. Add it once the owner confirms it is unlocked."},
+    "bar_4": {"rect": [1093, 1534, 40, 32], "why": "Bolt, locked until Lv 14."},
+    "bar_5": {"rect": [1165, 1534, 40, 32], "why": "Judgment Thunder has no cooldown (aion2data: null), so its slot never changes look and calibrate would refuse it."},
+    "bar_6": {"rect": [1227, 1534, 40, 32], "why": "Empty (stigma slot)."},
+    "bar_7": {"rect": [1290, 1534, 40, 32], "why": "Empty (stigma slot)."},
+    "bar_8": {"rect": [1354, 1534, 40, 32], "why": "Empty (stigma slot)."},
+    "bar_lmb": {"rect": [1551, 1534, 40, 32], "why": "Earth's Retribution (MP restore) on left click: no cooldown, and the key rule refuses mouse buttons."},
+    "bar_rmb": {"rect": [1615, 1534, 40, 32], "why": "Empty since Judgment Thunder moved to 5 (2026-10-28 21:42)."},
+    "item_x": {"rect": [931, 1470, 32, 26], "why": "Emergency Health Potion (X), inferred position: first item slot. It joins only if one cooldown frame can show it used along with the skills; a potion at full HP may not fire."},
+    "item_f5": {"rect": [1351, 1470, 32, 26], "why": "Courage Scroll (F5), inferred position: first item slot right of the emblem. Same single-frame cooldown requirement."},
+    "item_f7": {"rect": [1467, 1470, 32, 26], "why": "Benediction Scroll (F7), inferred position: third item slot right of the emblem. Same single-frame cooldown requirement."}
+  }
+}

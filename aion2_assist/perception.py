@@ -4,11 +4,16 @@ from dataclasses import dataclass
 from typing import Dict, Optional
 
 from .frame import Frame, Reading, dist, mean_rgb, mean_vs, template_score
-from .profile import Profile
+from .profile import BAR_FILLS, Profile
 
 
-def read_bar(frame: Frame, rect, color, tol) -> Reading:
-    """Fill fraction = contiguous run of colour-matching columns from the left."""
+def read_bar(frame: Frame, rect, color, tol, fill="left") -> Reading:
+    """Fill fraction = contiguous run of colour-matching columns from the bar's anchored end.
+
+    fill="left" (default): the bar empties toward its left end. fill="right": it empties toward the right end
+    (AION 2's HP bar, whose fill sits against the centre emblem)."""
+    if fill not in BAR_FILLS:
+        raise ValueError(f"bar fill must be one of {BAR_FILLS}")
     rows = frame.crop_rows(rect)
     w, h = rect[2], rect[3]
     match = []
@@ -19,6 +24,8 @@ def read_bar(frame: Frame, rect, color, tol) -> Reading:
             if abs(row[i] - color[0]) <= tol and abs(row[i + 1] - color[1]) <= tol and abs(row[i + 2] - color[2]) <= tol:
                 n += 1
         match.append(2 * n >= h)
+    if fill == "right":
+        match.reverse()  # count from the anchored (right) end; stray/confidence logic is mirrored with it
     run = 0
     while run < w and match[run]:
         run += 1
@@ -65,8 +72,8 @@ class Perceiver:
         score = template_score(frame.flat(tuple(reg["anchor"])), tpl["anchor"])
         ok = score >= thr["anchor"]
         anchor = Reading(ok, score if ok else 1.0 - score, ts)
-        hp = read_bar(frame, tuple(reg["hp_bar"]), tpl["hp_color"], thr["bar_tol"])
-        mp = read_bar(frame, tuple(reg["mp_bar"]), tpl["mp_color"], thr["bar_tol"])
+        hp = read_bar(frame, tuple(reg["hp_bar"]), tpl["hp_color"], thr["bar_tol"], p.bar_fill("hp"))
+        mp = read_bar(frame, tuple(reg["mp_bar"]), tpl["mp_color"], thr["bar_tol"], p.bar_fill("mp"))
         k, c = classifyn(mean_rgb(frame.flat(tuple(reg["target"]))), tpl["target"])
         target = Reading(k, c, ts)  # 'enemy' | 'none' | 'friendly' (friendly only if calibrated)
         slots = {}

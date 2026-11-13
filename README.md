@@ -1,4 +1,4 @@
-# aion2-cleric-assist 0.3.0 (live behavior unverified)
+# aion2-cleric-assist 0.3.1 (live behavior unverified)
 
 > **Lane owner since 2026-11-12 14:51Z:** Claude session `claude-aion2-cleric-assist`. The owner reassigned the
 > lane in that session's terminal ("take it from the other repo please" / "and lets get it up and running to finish
@@ -68,6 +68,71 @@ deleting it or choosing another journal deliberately starts a new run and loses 
 Workflow completion/blocked outcomes stop the live orchestrator and release inputs. Replay returns 0 only for
 confirmed completion, 4 for incomplete/blocked execution, and 2 for invalid inputs.
 
+## Drafts from the owner's earlier macro (0.3.1)
+The owner's PC has an earlier Aion 2 project, `~/Projects/aion2-cleric-macro`. On 2026-11-13 this lane read it
+without changing anything there. It provided three things:
+- **Binds.** The hotbar was read live on 2026-10-28 by matching icons, and a 2026-11-09 Skill-window frame shows
+  the same layout.
+- **Cooldowns.** An aion2data.com snapshot of game data 2026.10.28.
+- **Screenshots.** Four real 2560x1600 frames: one HUD frame dimmed by a disconnect dialog, and three Skill-window
+  frames. Copies were analysed outside the repo; none were committed or packaged.
+
+Two draft files come from that:
+- `regions.alienware-2560x1600.draft.json`: HUD geometry only, measured on the dimmed frame and checked with an
+  overlay render. It covers the anchor (class emblem without the level number), both bars, slots 1, 2, Q and E, and
+  the excluded slots with reasons. `target` is not set, so `calibrate` refuses the file until it is measured on a
+  frame with an enemy targeted. The macro detected targets by cyan brackets in the game world, not in a fixed HUD
+  rectangle.
+- `config.alienware-draft.json`: Q (heal over time below 75% HP), 1, 2 and E are enabled. 3, 4, 5, the X potion
+  and the F5/F7 scrolls are off. F3 (Return) and F6 (Speed, auto-used by the game) are never bound. `window_match`
+  is `steam_app_3393110`; F8 toggles and F9 stops, as in the macro. It passes `check-config`.
+
+Deliberately **not** carried over: the macro's timing block and every `retry_jitter`, its humanized-input module,
+and its `uinput` virtual devices. Its capture method (`import -window` on the XWayland game window, which needs no
+portal dialog) is noted as an option only.
+
+**Fixed in 0.3.1: bars can be anchored at the right.** On the real frame, the HP bar's fill sits against the
+centre emblem. At 1,072/1,954 HP the right 156 of 285 px were red. The old reader counted from the left. Calibrated
+from a shot below full HP, it confidently reported the empty part: 0.456 on that frame against a true 0.549. A
+regions spec can now say `"bar_fill": {"hp": "right", "mp": "left"}`. Calibration then samples the colour at the
+anchored end and the reader counts from it. Specs without the key behave exactly as before, with unchanged
+profile hashes. The MP bar's direction is unverified: it is full in the only frame, so "left" is assumed by
+symmetry.
+
+**Known limits, open until real frames arrive:**
+1. **HP reads low.** The leading ~38 px of the HP fill is magenta, not red. The single-colour tolerance stops there,
+   so HP reads a few points low; it was 4–8 points on the dimmed frame. That means healing early, never late. Frames
+   at several HP levels will show whether HP needs a wider tolerance or a hue rule.
+2. **The E and Q stacks may not show a cooldown.** A stack casts whichever of its skills is usable: Chain of
+   Torment, Condemnation or Scattershot on E; Light of Regeneration or Healing Light on Q. So its slot may still
+   read ready after a press.
+   - **E:** the draft gives it cooldown 0. It is pressed whenever its slot reads ready, at most
+     `max_keys_per_sec`, after 1 and 2.
+   - **Q:** it keeps cooldown 6, which puts it under desync tracking. Below `safe_hp` no damage is pressed, so
+     nothing resets the miss counter. Three Q presses that leave the slot reading ready then latch the assist off
+     within about 15 s, while HP is low.
+   - **Cooldown 0 would be worse for Q.** Upkeep runs before damage, so a slot that always reads ready would block
+     all damage while HP is under `hot_hp`.
+
+   The cooldown capture (below) shows how each slot looks after one press and after its stack is used up. Set
+   both values from it.
+3. **No-cooldown fillers can't be used.** Judgment Thunder (5) and Earth's Retribution (left click, the MP restore)
+   never change look. Calibration refuses them, and an uncalibrated slot reads `slot_uncertain` and is never
+   pressed. Using them needs a design change; Earth's Retribution also needs a key instead of a mouse button.
+4. **Potions and scrolls need their own cooldown frames.** `calibrate` takes one cooldown frame for all slots, so
+   they join only if one screenshot can show them used together with the skills.
+
+**Cooldown capture for the draft slots.** Target an enemy and run
+`.venv/bin/python -m aion2_assist capture --every 1 --seconds 60`. Press 1 and 2 once each, then press Q and E
+repeatedly until neither casts anything more. The one-per-second frames show each stacked slot after one press and
+after the stack is used up. That provides the single all-on-cooldown frame `calibrate` needs, and shows whether Q
+and E can stay in `regions.slots`.
+
+`binds validate config.alienware-draft.json --profile profile.json` lists the draft's disabled slots that have no
+region as "no such slot". That is expected: `run` checks only enabled slots against the profile.
+5. **Frame size is assumed.** The regions assume the ScreenCast stream is the native 2560x1600, while the macro's
+   frames came from `import -window`. A different size is refused, so a wrong guess fails closed.
+
 ## Private build artifact
 ```
 python3 tools/build_private.py --out dist
@@ -92,8 +157,9 @@ cd ~/Projects/aion2-cleric-assist && .venv/bin/python -m aion2_assist capture --
 The portal asks which screen to share. Frames go to a new `shots/<UTC stamp>/` folder as lossless PNGs at the
 stream's native size. Nothing is scaled, so the pixels match the live reader. It opens no RemoteDesktop
 session and cannot send input. While it records, play normally and pass through these states:
-an enemy targeted with every slot ready, every slot on cooldown, no target, an ally targeted, low HP if it
-happens, an NPC dialog, a loading screen, a vendor buy and sell window, and the quest tracker. Then
+an enemy targeted with every slot ready, every slot on cooldown, no target, an ally targeted, HP at full,
+about half and low (and MP partly spent), an NPC dialog, a loading screen, a vendor buy and sell window, and
+the quest tracker. Then
 `calibrate`, `read` and the workflow `calibrate` run on the chosen frames (devbox or PC).
 Checked on the PC: every pipeline element exists, and a synthetic `videotestsrc` run through the same pipeline
 produced PNGs that the stdlib reader loads. The real screen-share path has not run yet.
@@ -277,7 +343,9 @@ no chords), duplicates, bad roles, unknown slots and a profile-hash mismatch. `c
 1. Live verification that injected keys are invisible to `/dev/input` (self-check cannot prove it offline).
 2. Real-bus behaviour of `JeepneyTransport`, `gst-launch-1.0` availability/latency on the Alienware, the KWin script
    package on the installed Plasma version: none verifiable offline (`isScriptLoaded` itself is verified in KWin source).
-3. Owner inputs: real calibration, the filled-in binds/config, `window_match`, `ignore_codes` for the control hotkeys.
+3. Owner inputs: real calibration frames, including an enemy targeted, every calibrated slot on cooldown in one
+   frame, and HP at several levels. Also confirm the drafted binds in `config.alienware-draft.json` (`window_match`
+   and `ignore_codes` are drafted there too), and decide how Earth's Retribution gets used: a key, or pointer input.
 
 ## Cannot be verified offline
 Whether Proton/XWayland accepts portal (libei) keyboard input; NC detection behaviour; real capture latency and

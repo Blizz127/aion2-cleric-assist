@@ -12,7 +12,7 @@ set -eu
 HOST=${AION2_HOST:-alienware-bazzite}
 DEST=${AION2_DEST:-Projects/aion2-cleric-assist}   # relative to the remote home
 cd "$(dirname "$0")"
-FILES="README.md requirements.txt config.example.json regions.example.json aion2_assist kwin_script tests tools"
+FILES="README.md requirements.txt config.example.json regions.example.json config.alienware-draft.json regions.alienware-2560x1600.draft.json aion2_assist kwin_script tests tools"
 VERSION=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' aion2_assist/__init__.py)
 
 case "${1:-}" in
