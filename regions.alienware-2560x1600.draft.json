@@ -38,8 +38,8 @@
     "bar_8": {"rect": [1354, 1534, 40, 32], "why": "Empty (stigma slot)."},
     "bar_lmb": {"rect": [1551, 1534, 40, 32], "why": "Earth's Retribution (MP restore) on left click: no cooldown, and the key rule refuses mouse buttons."},
     "bar_rmb": {"rect": [1615, 1534, 40, 32], "why": "Empty since Judgment Thunder moved to 5 (2026-10-28 21:42)."},
-    "item_x": {"rect": [931, 1470, 32, 26], "why": "Emergency Health Potion (X), inferred position: first item slot. It joins only if one cooldown frame can show it used along with the skills; a potion at full HP may not fire."},
-    "item_f5": {"rect": [1351, 1470, 32, 26], "why": "Courage Scroll (F5), inferred position: first item slot right of the emblem. Same single-frame cooldown requirement."},
-    "item_f7": {"rect": [1467, 1470, 32, 26], "why": "Benediction Scroll (F7), inferred position: third item slot right of the emblem. Same single-frame cooldown requirement."}
+    "item_x": {"rect_inferred": [931, 1470, 32, 26], "why": "Emergency Health Potion (X), inferred position: first item slot. It joins only if one cooldown frame can show it used along with the skills; a potion at full HP may not fire."},
+    "item_f5": {"rect_inferred": [1351, 1470, 32, 26], "why": "Courage Scroll (F5), inferred position: first item slot right of the emblem. Same single-frame cooldown requirement."},
+    "item_f7": {"rect_inferred": [1467, 1470, 32, 26], "why": "Benediction Scroll (F7), inferred position: third item slot right of the emblem. Same single-frame cooldown requirement."}
   }
 }

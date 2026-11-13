@@ -6,10 +6,11 @@
     "F3": "Return Scroll: never pressed.",
     "F6": "Speed Scroll: the game's own auto-use keeps it up.",
     "F1": "Second potion: its effect was never confirmed in the macro.",
-    "BTN_LEFT": "Earth's Retribution (damage, restores MP) is on left click. The key rule refuses mouse buttons, so it cannot be bound. Owner decision: rebind it to a key, or allow pointer input.",
+    "BTN_LEFT": "Earth's Retribution (damage, restores MP) is on left click and is not automated: no mouse-click automation, and the owner's left-click binding stays as it is. See slots.mp_restore.",
     "6-8, RMB": "Empty slots."
   },
-  "_choices_to_confirm": "mode toggle with F8 on/off and F9 emergency stop mirrors the macro's F8/F9 (the safer default is hold-to-run). hot_hp 0.75 is the macro's Q threshold. hp_max/mp_max are the level-9 values from 2026-10-28; they only scale MP costs, which are all 0 here.",
+  "_decisions": "Coordinator decisions of 2026-11-13 (task 49df99b370f6), made under the owner's delegation: F8 toggle and F9 emergency stop are the default, as in the macro, and startup is disarmed. MP restoration stays off. The X/F5/F7 item slots stay off until there is binding evidence for their positions.",
+  "_values_from_the_macro": "hot_hp 0.75 is the macro's Q threshold. hp_max/mp_max are the level-9 values from 2026-10-28; they only scale MP costs, which are all 0 here.",
   "window_match": "steam_app_3393110",
   "hp_max": 1954,
   "mp_max": 1712,
@@ -38,10 +39,16 @@
     "bar_5": {"_skill": "Judgment Thunder (filler, no cooldown). Off: a slot without a cooldown look cannot be calibrated, and an uncalibrated slot is never pressed.",
               "key": "5", "role": "dmg", "cooldown": 0, "cast": 0, "gcd": 0, "mp_cost": 0, "priority": 40, "duration": 0, "enabled": false},
     "item_x": {"_skill": "Emergency Health Potion. The macro used it at HP <= 35% every 15 s; the real potion cooldown is unknown. Off until its slot is calibrated.",
+               "_evidence": "The key comes from the macro's notes (unchanged since 2026-10-22). Which on-screen item slot it is was inferred from slot order; the HUD shows no key labels. It stays off until there is binding evidence.",
                "key": "x", "role": "heal", "cooldown": 15, "cast": 0, "gcd": 0, "mp_cost": 0, "priority": 25, "duration": 0, "enabled": false},
     "item_f5": {"_skill": "Courage Scroll (the macro used it once per 300 s while fighting). Off until its slot is calibrated.",
+                "_evidence": "The key comes from the macro's notes (the macro identified the scroll against reference icons). Which on-screen item slot it is was inferred from slot order. It stays off until there is binding evidence.",
                 "key": "F5", "role": "buff", "cooldown": 0, "cast": 0, "gcd": 0, "mp_cost": 0, "priority": 50, "duration": 300, "enabled": false},
     "item_f7": {"_skill": "Benediction Scroll (once per 300 s while fighting). Off until its slot is calibrated.",
-                "key": "F7", "role": "buff", "cooldown": 0, "cast": 0, "gcd": 0, "mp_cost": 0, "priority": 51, "duration": 300, "enabled": false}
+                "_evidence": "The key comes from the macro's notes (the macro identified the scroll against reference icons). Which on-screen item slot it is was inferred from slot order. It stays off until there is binding evidence.",
+                "key": "F7", "role": "buff", "cooldown": 0, "cast": 0, "gcd": 0, "mp_cost": 0, "priority": 51, "duration": 300, "enabled": false},
+    "mp_restore": {"_skill": "Earth's Retribution: damage that restores MP, no cooldown. The owner has it on left click.",
+                   "_decision": "Coordinator decision 2026-11-13 (task 49df99b370f6): MP restoration stays off, with no mouse-click automation and no change to the owner's left-click binding. This entry is the optional keyboard binding. Once a verified keyboard key exists, set key, give the skill a calibrated slot region, then enable it. A slot with no cooldown still cannot be calibrated (README known limit 3).",
+                   "key": "UNSET_MP_RESTORE", "role": "dmg", "cooldown": 0, "cast": 0, "gcd": 0, "mp_cost": 0, "priority": 41, "duration": 0, "enabled": false}
   }
 }

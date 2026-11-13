@@ -113,7 +113,7 @@ class DraftFiles(unittest.TestCase):
         self.assertNotIn("target", reg)  # unknown until a targeted frame exists
         self.assertFalse([k for k in reg if k.startswith("_")] + [k for k in reg["slots"] if k.startswith("_")])
         rects = [reg["anchor"], reg["hp_bar"], reg["mp_bar"], *reg["slots"].values(),
-                 *(e["rect"] for e in spec["_excluded_slots"].values())]
+                 *(e.get("rect") or e["rect_inferred"] for e in spec["_excluded_slots"].values())]
         for r in rects:
             x, y, w, h = r
             self.assertTrue(all(type(v) is int for v in r), r)

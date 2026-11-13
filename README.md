@@ -1,9 +1,10 @@
-# aion2-cleric-assist 0.3.1 (live behavior unverified)
+# aion2-cleric-assist 0.3.2 (live behavior unverified)
 
 > **Lane owner since 2026-11-12 14:51Z:** Claude session `claude-aion2-cleric-assist`. The owner reassigned the
 > lane in that session's terminal ("take it from the other repo please" / "and lets get it up and running to finish
-> the goal"). At about 15:05Z, at the owner's request, the Codex session for task 6b52dbf3ae9f was closed and the task
-> marked cancelled. No other lane should write here unless the owner hands the lane over.
+> the goal"). At 22:49Z the same day, at the owner's request, the Codex session for task 6b52dbf3ae9f was closed and
+> the task marked cancelled (coordinator board: cancelled 2026-11-12T22:49:35Z). No other lane should write here
+> unless the owner hands the lane over.
 
 Combat assistance and calibrated visual workflows for an Aion 2 Cleric on Bazzite/KDE Wayland
 (Steam appid 3393110, Proton). The full-game autonomy goal is **not complete**: the seven-stage
@@ -83,9 +84,27 @@ Two draft files come from that:
   the excluded slots with reasons. `target` is not set, so `calibrate` refuses the file until it is measured on a
   frame with an enemy targeted. The macro detected targets by cyan brackets in the game world, not in a fixed HUD
   rectangle.
-- `config.alienware-draft.json`: Q (heal over time below 75% HP), 1, 2 and E are enabled. 3, 4, 5, the X potion
-  and the F5/F7 scrolls are off. F3 (Return) and F6 (Speed, auto-used by the game) are never bound. `window_match`
-  is `steam_app_3393110`; F8 toggles and F9 stops, as in the macro. It passes `check-config`.
+- `config.alienware-draft.json`: Q (heal over time below 75% HP), 1, 2 and E are enabled. 3, 4 and 5 are off.
+  F3 (Return) and F6 (Speed, auto-used by the game) are never bound. `window_match` is `steam_app_3393110`. It
+  passes `check-config`.
+
+**Coordinator decisions, 2026-11-13** (task 49df99b370f6, made under the owner's delegation). Tests in
+`tests/test_draft_decisions.py` enforce them:
+- **Item slots stay off.** The X potion and F5/F7 scrolls keep the keys from the macro's notes, but which on-screen
+  slot each one is was only inferred from slot order. Each is `enabled: false` with an `_evidence` note. In the
+  regions draft their positions are `rect_inferred`, not `rect`, and they are not in `regions.slots`.
+- **MP restoration stays off.** Earth's Retribution is the explicitly unset keyboard slot `mp_restore`
+  (`UNSET_MP_RESTORE`, disabled). Nothing automates mouse clicks, and the owner's left-click binding is untouched.
+  A verified keyboard key plus a calibrated slot can enable it later. The rest of the config is valid without it.
+- **F8 and F9 are the controls, and startup is disarmed:**
+  - Nothing is pressed until F8 (toggle). A second F8 disarms and releases every key.
+  - F9 (emergency) disarms at once, releases every key, and stays disarmed until a fresh F8. F9 wins over an F8
+    pressed at the same moment.
+  - F8 and F9 presses (`ignore_codes` 66 and 67) never count as manual play.
+  - The GlobalShortcuts portal is asked for F8 and F9 as *preferred* triggers; the owner confirms the real keys in
+    the portal dialog. If the owner picks other keys there, `ignore_codes` must change to those keys' evdev codes.
+    Otherwise each press counts as manual play and pauses the assist for `manual_pause_ms`, which is safe but
+    confusing.
 
 Deliberately **not** carried over: the macro's timing block and every `retry_jitter`, its humanized-input module,
 and its `uinput` virtual devices. Its capture method (`import -window` on the XWayland game window, which needs no
@@ -343,9 +362,15 @@ no chords), duplicates, bad roles, unknown slots and a profile-hash mismatch. `c
 1. Live verification that injected keys are invisible to `/dev/input` (self-check cannot prove it offline).
 2. Real-bus behaviour of `JeepneyTransport`, `gst-launch-1.0` availability/latency on the Alienware, the KWin script
    package on the installed Plasma version: none verifiable offline (`isScriptLoaded` itself is verified in KWin source).
-3. Owner inputs: real calibration frames, including an enemy targeted, every calibrated slot on cooldown in one
-   frame, and HP at several levels. Also confirm the drafted binds in `config.alienware-draft.json` (`window_match`
-   and `ignore_codes` are drafted there too), and decide how Earth's Retribution gets used: a key, or pointer input.
+3. Owner-operated evidence, none of which exists yet:
+   - real capture frames with an enemy targeted, needed to measure `target`;
+   - every calibrated slot on cooldown in one frame (the cooldown capture above);
+   - HP at several levels, with MP partly spent;
+   - how the Q and E stacks look after each press.
+
+   Optional evidence would enable more slots: binding evidence for the X/F5/F7 item slots, and a verified keyboard
+   key for Earth's Retribution. The 2026-11-13 coordinator decisions settled the binds, controls and MP default. The
+   unit tests and deploys are not live acceptance.
 
 ## Cannot be verified offline
 Whether Proton/XWayland accepts portal (libei) keyboard input; NC detection behaviour; real capture latency and
