@@ -3,8 +3,10 @@ an input device, or the network."""
 import datetime
 import json
 import os
+import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from aion2_assist import capture
 from aion2_assist.frame import Frame
@@ -165,6 +167,70 @@ class Capture(unittest.TestCase):
         self.assertIn("gstreamer exited with code 1", h.summary()["reason"])
         self.assertTrue(os.path.exists(os.path.join(self.folder, "gst-stderr.log")))
         self.assertTrue(h.transport.transport_closed)
+
+    def test_gstreamer_failure_after_frames_is_not_reported_as_success(self):
+        for exit_code in (1, -9):
+            with self.subTest(exit_code=exit_code):
+                out = os.path.join(self.out, str(exit_code))
+                h = Harness(frames=2, exit_code=exit_code)
+                self.assertEqual(h.run(out), 4)
+                self.assertEqual(h.summary()["frames"], 2)
+                self.assertIn(f"gstreamer exited with code {exit_code}", h.summary()["reason"])
+                for name in ("frame-00000.png", "frame-00001.png", "gst-stderr.log"):
+                    self.assertTrue(os.path.isfile(os.path.join(out, STAMP, name)))
+                self.assertEqual(h.transport.methods()[-1], "Close")
+                self.assertTrue(h.transport.transport_closed)
+
+    def test_gstreamer_clean_exit_with_frames_is_success(self):
+        h = Harness(frames=2, exit_code=0)
+        self.assertEqual(h.run(self.out), 0)
+        self.assertEqual(h.summary()["frames"], 2)
+        self.assertIn("gstreamer exited with code 0", h.summary()["reason"])
+
+    def test_terminate_failure_still_kills_and_closes_screen_share(self):
+        h = Harness()
+        with patch.object(FakeProc, "terminate", side_effect=OSError("terminate failed")):
+            self.assertEqual(h.run(self.out), 4)
+        self.assertTrue(h.spawned[0][2].killed)
+        self.assertEqual(h.transport.methods()[-1], "Close")
+        self.assertTrue(h.transport.transport_closed)
+        self.assertEqual(h.summary()["frames"], 2)
+        self.assertIn("terminate failed", h.summary()["reason"])
+
+    def test_wait_failure_still_closes_screen_share_and_reports_frames(self):
+        h = Harness()
+        with patch.object(FakeProc, "wait", side_effect=subprocess.TimeoutExpired("gst-launch-1.0", 5)):
+            self.assertEqual(h.run(self.out), 4)
+        self.assertTrue(h.spawned[0][2].killed)
+        self.assertEqual(h.transport.methods()[-1], "Close")
+        self.assertTrue(h.transport.transport_closed)
+        self.assertEqual(h.summary()["frames"], 2)
+        self.assertIn("cleanup failed", h.summary()["reason"])
+
+    def test_terminate_timeout_can_recover_with_kill(self):
+        h = Harness()
+        with patch.object(FakeProc, "wait", side_effect=[subprocess.TimeoutExpired("gst-launch-1.0", 5), -9]):
+            self.assertEqual(h.run(self.out), 0)
+        self.assertTrue(h.spawned[0][2].killed)
+        self.assertTrue(h.transport.transport_closed)
+        self.assertEqual(h.summary()["reason"], "duration reached")
+
+    def test_transport_close_failure_is_reported_without_losing_summary(self):
+        h = Harness()
+        with patch.object(h.transport, "close", side_effect=OSError("bus close failed")):
+            self.assertEqual(h.run(self.out), 4)
+        self.assertTrue(h.spawned[0][2].terminated)
+        self.assertEqual(h.transport.methods()[-1], "Close")
+        self.assertEqual(h.summary()["frames"], 2)
+        self.assertIn("bus close failed", h.summary()["reason"])
+
+    def test_transport_close_failure_preserves_portal_denial_result(self):
+        h = Harness(transport=portal(SelectSources=PortalDenied("consent denied")))
+        with patch.object(h.transport, "close", side_effect=OSError("bus close failed")):
+            self.assertEqual(h.run(self.out), 3)
+        self.assertEqual(h.spawned, [])
+        self.assertIn("portal refused", h.summary()["reason"])
+        self.assertIn("bus close failed", h.summary()["reason"])
 
     def test_ctrl_c_stops_cleanly_and_keeps_frames(self):
         h = Harness(interrupt=True)

@@ -50,7 +50,9 @@ def _frames(folder):
 
 def run_capture(out_dir, every_s, seconds, *, transport_factory, spawn=subprocess.Popen, clock=time.monotonic,
                 sleep=time.sleep, which=shutil.which, now=None, emit=print):
-    """Returns 0 when frames were written, 2 for invalid input, 3 when the portal refused, 4 when no frame arrived."""
+    """Returns 0 when frames were written without error, 2 for invalid input, 3 for portal refusal,
+    or 4 for capture failure/no frames. Saved frames are preserved even when capture fails.
+    """
     if not (EVERY_RANGE[0] <= every_s <= EVERY_RANGE[1]) or not (SECONDS_RANGE[0] <= seconds <= SECONDS_RANGE[1]):
         emit(f"capture refused: --every must be {EVERY_RANGE[0]}-{EVERY_RANGE[1]} s and --seconds "
              f"{SECONDS_RANGE[0]:g}-{SECONDS_RANGE[1]:g} s")
@@ -69,6 +71,7 @@ def run_capture(out_dir, every_s, seconds, *, transport_factory, spawn=subproces
          f"{every_s:g} s for up to {seconds:g} s into {folder}. Nothing is sent to the game. Ctrl-C stops early.")
     transport = session = proc = fd = None
     reason, code = "duration reached", 0
+    cleanup_errors = []
     started = clock()
     try:
         transport = transport_factory()
@@ -90,6 +93,8 @@ def run_capture(out_dir, every_s, seconds, *, transport_factory, spawn=subproces
         while True:
             if proc.poll() is not None:
                 reason = f"gstreamer exited with code {proc.returncode} (see gst-stderr.log)"
+                if proc.returncode != 0:
+                    code = 4
                 break
             if transport.is_closed(session):
                 reason = "the portal closed the screen-share session"
@@ -105,23 +110,39 @@ def run_capture(out_dir, every_s, seconds, *, transport_factory, spawn=subproces
         reason, code = f"portal refused: {e}", 3
     except KeyboardInterrupt:
         reason = "stopped by the owner"
-    except Exception as e:  # report and clean up; never leave the stream or the helper running
+    except Exception as e:  # report the error; cleanup below attempts each independent resource
         reason, code = f"capture failed: {e}", 4
     finally:
-        if proc is not None and proc.poll() is None:
-            proc.terminate()
-            try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait(timeout=5)
-        if transport is not None:
-            if session is not None:
+        try:
+            if proc is not None:
                 try:
-                    transport.call(PORTAL, session, SESSION_IFACE, "Close", "", [])
-                except Exception:
-                    pass  # the session may already be gone; dropping the connection ends it anyway
-            transport.close()
+                    if proc.poll() is None:
+                        proc.terminate()
+                        proc.wait(timeout=5)
+                except Exception as e:
+                    if not isinstance(e, subprocess.TimeoutExpired):
+                        cleanup_errors.append(f"gstreamer cleanup failed: {e}")
+                    try:
+                        proc.kill()
+                        proc.wait(timeout=5)
+                    except Exception as e:
+                        cleanup_errors.append(f"gstreamer kill/wait cleanup failed: {e}")
+        finally:
+            if transport is not None:
+                try:
+                    if session is not None:
+                        try:
+                            transport.call(PORTAL, session, SESSION_IFACE, "Close", "", [])
+                        except Exception:
+                            pass  # session may already be gone; still drop the connection
+                finally:
+                    try:
+                        transport.close()
+                    except Exception as e:
+                        cleanup_errors.append(f"transport cleanup failed: {e}")
+    if cleanup_errors:
+        code = code or 4
+        reason += "; " + "; ".join(cleanup_errors)
     frames = _frames(folder)
     sizes = {png_size(os.path.join(folder, n)) for n in frames}
     sizes.discard(None)

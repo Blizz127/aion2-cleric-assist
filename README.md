@@ -1,4 +1,4 @@
-# aion2-cleric-assist 0.3.2 (live behavior unverified)
+# aion2-cleric-assist 0.3.3 (live behavior unverified)
 
 > **Lane owner from the 2026-11-15 handoff:** the Codex GPT-6-Astra lead, by the owner's order of 07:01–07:03Z
 > (coordinator task 2e32f40b717b). Start with `HANDOFF.md`. Before that, Claude session `claude-aion2-cleric-assist`
@@ -183,6 +183,12 @@ the quest tracker. Then
 `calibrate`, `read` and the workflow `calibrate` run on the chosen frames (devbox or PC).
 Checked on the PC: every pipeline element exists, and a synthetic `videotestsrc` run through the same pipeline
 produced PNGs that the stdlib reader loads. The real screen-share path has not run yet.
+
+**Capture failure reporting (0.3.3).** A GStreamer failure returns exit 4 even if it already saved frames;
+the saved PNGs and diagnostic log are kept. Errors stopping GStreamer still allow screen-share and bus cleanup
+to be attempted. Cleanup failures are included in the summary and return failure; portal denial keeps exit 3.
+These cases are tested with fake processes and portals only. This does not verify frame contents or satisfy the
+outstanding owner capture requirement.
 
 ## Architecture
 ```

@@ -4,6 +4,16 @@
 off Claude Opus to Codex GPT-6-Astra. Coordinator task 2e32f40b717b. From this handoff commit on, the Codex lead is
 the only writer. The Claude session `claude-aion2-cleric-assist` (lead from 2026-11-12 14:51Z) stops writing here.
 
+## Codex continuation (2026-11-15): 0.3.3
+- Fixed offline-reproduced capture error handling: a failed GStreamer process now returns failure even after
+  saving frames. Errors stopping the process no longer skip screen-share/bus cleanup or the capture summary.
+- Saved frames and diagnostic logs are preserved; cleanup errors appear in the summary. Portal denial still
+  returns exit 3, and normal owner interruption can still keep the captured frames successfully.
+- Focused check: `python3 -m unittest tests.test_capture` passes all 17 tests, using fake portals/processes only.
+  The full suite was not repeated for this patch. Private build receipts are under `dist/`.
+- **The owner capture requirement below remains unsatisfied; `live_verified` is still false.** No live
+  capture, calibration, approval or game-input trial was performed for this patch. Nothing was pushed.
+
 ## State at handoff (2026-11-15 07:11Z)
 - **Version 0.3.2. Nothing has run against the game: `live_verified` is false.**
 - **Branch `aion2-assist-0.3.2`.** This commit sits on top of `e8f3290`. `main` is still at `d5c7a68`; the
