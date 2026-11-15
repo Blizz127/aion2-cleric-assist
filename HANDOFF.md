@@ -12,6 +12,16 @@ the only writer. The Claude session `claude-aion2-cleric-assist` (lead from 2026
   every file is preserved. This does not validate pixel decoding or satisfy calibration evidence.
 - Focused validation uses `python3 -m unittest tests.test_capture`, with fake portals/processes and synthetic
   PNG files only. The owner capture hold and `live_verified=false` remain in force. Nothing was pushed.
+- Source commit `24b597c`; all 22 focused capture tests pass locally and on Alienware Python 3.14.8.
+  Private artifact: `dist/aion2-assist-0.3.4-20261115T133932247662Z.tar.gz`, sha256
+  `4b0181841d94e03344fe2952d7594f4350826a9c301cbfe04cd1072198aaeb35`; all eight build smoke checks passed.
+- Deployed via `./deploy-alienware.sh` at 13:40:23Z after an idle-process check and source backup. All 55
+  packaged source files matched their hashes, draft config validation passed, and protected files were unchanged.
+  Target `shots/` remains absent. Receipt: `dist/deploy-0.3.4-20261115T134023Z.json`.
+- Pre-deployment source backup on Alienware:
+  `~/.local/share/aion2-assist/backups/pre-0.3.4-20261115T134020710102Z.tar.gz`, sha256
+  `9f39d9cced6e993ef732e8b7962058b30e52f117d1990d5d757bc06d92615a20`.
+  Rollback uses the same separate-directory/existing-deploy-script procedure described for 0.3.3 below.
 
 ## Codex continuation (2026-11-15): 0.3.3
 - Fixed offline-reproduced capture error handling: a failed GStreamer process now returns failure even after
