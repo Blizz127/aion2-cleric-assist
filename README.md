@@ -129,8 +129,9 @@ symmetry.
    - **E:** the draft gives it cooldown 0. It is pressed whenever its slot reads ready, at most
      `max_keys_per_sec`, after 1 and 2.
    - **Q:** it keeps cooldown 6, which puts it under desync tracking. Below `safe_hp` no damage is pressed, so
-     nothing resets the miss counter. Three Q presses that leave the slot reading ready then latch the assist off
-     within about 15 s, while HP is low.
+     nothing resets the miss counter. Three Q presses that leave the slot reading ready latch further output
+     within about 15 s, while HP is low. This is a desync latch, not a disarm: `enabled` remains true while keys
+     are suppressed. F9 still disarms.
    - **Cooldown 0 would be worse for Q.** Upkeep runs before damage, so a slot that always reads ready would block
      all damage while HP is under `hot_hp`.
 
@@ -265,6 +266,53 @@ remain false.** A technically valid owner-declared set includes `calibrate_argv`
 manual use, with a new output-path placeholder; it is never executed. Review the game-state labels, hashes,
 HP/MP readings, Q/E behavior and fresh frames before owner approval or any live trial. Real captures remain
 outstanding; do not substitute the generated demo geometry for the owner's draft.
+
+**Capture-to-calibration checklist.** The owner performs capture and native screen-share consent; the remaining
+offline steps can run on the devbox. The capture requirement is still open.
+
+1. On Alienware, run the three-minute general capture command above at the intended resolution/UI scale.
+   Include enemy/all-ready, no target, friendly target, full/half/low HP, partially spent MP and noncombat states.
+   Then run the one-second cooldown capture, pressing 1/2 and Q/E through each stack's exhaustion. Note the press
+   order so each Q/E sequence can be labeled honestly. If the session misses an all-four-slots cooldown frame,
+   report that gap; do not manufacture one from different images.
+2. Keep each original `shots/<UTC stamp>/` directory intact, including `gst-stderr.log`. The final
+   `capture_summary` is printed to the terminal, not saved automatically; retain that output with the session
+   notes. Exit 3 means portal denial; exit 4 means capture/cleanup/file failure. Preserve any saved frames and
+   logs for diagnosis; selected images must pass intake validation before calibration.
+3. Copy both session directories without deleting or flattening them. For example, from the devbox project:
+   ```sh
+   mkdir -p shots/owner-intake
+   rsync -a alienware-bazzite:Projects/aion2-cleric-assist/shots/ shots/owner-intake/
+   ```
+   Put the intake manifest at `shots/owner-intake/manifest.json`; reference images as
+   `<capture-stamp>/frame-00001.png`. The manifest can then select frames from both sessions while all paths
+   remain inside its directory. Keep fresh low-HP, mid-cooldown and noncombat frames aside for later checks.
+4. Review each selected frame and fill the manifest shown above. Q/E arrays preserve press order and may need
+   more than two images; unchanged visuals after a press are evidence to review, not proof of a failed cast.
+   Measure the real target rectangle and confirm frame size/bar directions in the regions draft. Keep disabled
+   item slots and `mp_restore` off; synthetic geometry and Q/E examples supply none of these measurements.
+5. Run `ingest validate` with that manifest and the measured regions. Address `missing_shots`,
+   `missing_evidence`, `errors` and state-omission warnings. `calibration_buildable` and
+   `evidence_coverage_complete` describe technical checks only. Review labels, actual HP/MP values and Q/E
+   behavior against the originals before using the suggested `calibrate_argv` manually. Choose a new profile
+   filename: the existing `calibrate` command can overwrite its output, and intake never executes it for you.
+6. Run `read --profile <new-profile.json> <fresh-frame.png>` on the reserved frames; compare HP/MP, target,
+   cooldown and noncombat readings with what is visible. Record unresolved cases and input hashes. Once real
+   calibration is accepted, pin its hash in the config. Owner approval, portal consent and the first live trial
+   remain separate, owner-operated gates; this checklist does not run them.
+
+**Rotation fixtures (0.4.1).** Run `python3 -m unittest tests.test_rotation_fixtures` for the focused offline
+regression. It loads the intake PNGs plus labeled scenario PNGs generated into a temporary directory, checks
+perception against `tests/fixtures/cleric_rotation.json`, and drives the unchanged Alienware draft through the
+real decider/controller with a fake clock and mock focus/input. No portal or game input is opened. Test-only
+geometry maps fictional s1/s2/s3/s4 pixels onto 1/2/Q/E; it is never written into the real regions draft.
+
+The cases cover damage priority and fixed spacing, Q upkeep, HP boundaries and falling-HP prediction,
+observed/tracked cooldowns, noncombat/uncertain/stale frames, disabled items and emergency disarm. The draft
+has no enabled direct-heal slot, so the low-HP expectation is Q upkeep, not an invented emergency heal. A
+steady-half-HP sequence with Q always reading ready reproduces Q presses at 0/6/12 seconds and the desync latch
+at 13.5 seconds. That is a documented limitation under synthetic conditions, not a correction or validation of
+real Q/E stack behavior. `live_verified` and `owner_evidence_satisfied` remain false.
 
 ## Architecture
 ```

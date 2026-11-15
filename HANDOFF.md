@@ -4,6 +4,21 @@
 off Claude Opus to Codex GPT-6-Astra. Coordinator task 2e32f40b717b. From this handoff commit on, the Codex lead is
 the only writer. The Claude session `claude-aion2-cleric-assist` (lead from 2026-11-12 14:51Z) stops writing here.
 
+## Codex continuation (2026-11-15): 0.4.1
+- Added labeled synthetic PNG rotation regressions using the unchanged Alienware draft config and a test-only
+  mapping of demo pixels to 1/2/Q/E. Expectations check perception first, then the real decider/controller with
+  mock input only. Generated PNGs remain temporary; only synthetic scenario labels and tests are packaged.
+- Cases cover priority/fixed spacing, HP boundaries/prediction, Q upkeep, observed/tracked cooldowns, disabled
+  items, unsafe/stale frames and emergency disarm. The existing Q-ready-after-press limitation is reproduced:
+  at steady half HP, Q presses at 0/6/12 seconds and output latches at 13.5 seconds after three misses.
+  This does not disarm (`enabled` stays true), and no Q/E policy or timing was changed without owner evidence.
+- README now joins capture, preservation of both sessions/logs/terminal summary, copying, labeling, intake,
+  calibration and fresh-frame checks into one checklist. Owner approval/first live trial remain separate.
+- All nine focused regressions pass locally across 24 labeled scenarios. Run
+  `python3 -m unittest tests.test_rotation_fixtures` to repeat them; private delivery includes
+  the existing ten offline build smokes. `BUILD.json` records source; delivery/backup/rollback receipt goes in
+  `dist/deploy-0.4.1-*.json`. Owner captures remain outstanding, `live_verified=false`, and nothing is pushed.
+
 ## Codex continuation (2026-11-15): 0.4.0
 - Added offline `ingest fixtures`, `ingest validate` and `ingest demo`. Fixtures are clearly synthetic,
   use the existing 320x180 demo UI, and never establish owner captures, real binds or Q/E stack semantics.
