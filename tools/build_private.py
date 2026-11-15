@@ -62,7 +62,8 @@ def main():
         env.pop("PYTHONPATH", None)
         checks = [check_deployment_inventory(stage, env)]  # --check never contacts the target
         for argv, expected in ((["--help"], 0), (["replay", "--demo", "--json"], 0),
-                               (["workflow", "demo"], 0), (["doctor"], 0), (["capture", "--help"], 0),
+                               (["workflow", "demo"], 0), (["ingest", "demo"], 0),
+                               (["doctor"], 0), (["capture", "--help"], 0),
                                (["capture", "--every", "0"], 2),
                                (["check-config", "--config", "config.alienware-draft.json"], 0),
                                (["run", "--gates-file", str(stage / "NONEXISTENT-APPROVAL")], 2)):
@@ -75,6 +76,12 @@ def main():
                 summary = json.loads(result.stdout.splitlines()[-1])
                 if not summary["complete"] or summary["confirmed"] != 7 or summary["live_verified"]:
                     raise RuntimeError("workflow smoke did not prove seven synthetic stages")
+                check["summary"] = summary
+            if argv == ["ingest", "demo"]:
+                summary = json.loads(result.stdout)
+                if (not summary["valid"] or not summary["synthetic"] or summary["live_verified"] or
+                        summary["owner_evidence_satisfied"] or summary["input_sent"] or summary["calibrate_argv"]):
+                    raise RuntimeError("ingest smoke failed or crossed the synthetic evidence boundary")
                 check["summary"] = summary
             checks.append(check)
         head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()

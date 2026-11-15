@@ -191,6 +191,8 @@ def main(argv=None):
     add_parser(sub)
     from .capture import add_parser as add_capture_parser
     add_capture_parser(sub)
+    from .ingest import add_parser as add_ingest_parser
+    add_ingest_parser(sub)
     c = sub.add_parser("calibrate", help="build a profile from full-frame owner screenshots")
     c.add_argument("--regions", required=True)
     c.add_argument("--shot", action="append", required=True, metavar="NAME=PNG",

@@ -33,7 +33,7 @@ class PrivatePackage(unittest.TestCase):
             shutil.copy2(ROOT / name, cls.fixture / name)
         # Synthetic marker files, never real captures or owner configuration.
         for name in ("config.json", "profile.json", "LIVE-APPROVED", "progress.jsonl", "README.md.bak-test",
-                     "shots/private-marker.txt", ".venv/private-marker.txt"):
+                     "shots/private-marker.txt", "synthetic-fixtures/SYNTHETIC.json", ".venv/private-marker.txt"):
             path = cls.fixture / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("synthetic private packaging marker\n")
@@ -72,7 +72,7 @@ class PrivatePackage(unittest.TestCase):
         self.assertFalse(self.manifest["live_verified"])
         self.assertFalse(self.manifest["published"])
         self.assertEqual(hashlib.sha256(self.artifact.read_bytes()).hexdigest(), self.receipt["sha256"])
-        self.assertEqual(self.receipt["smoke_checks"], 9)
+        self.assertEqual(self.receipt["smoke_checks"], 10)
         self.assertTrue(any(c["argv"] == ["sh", "./deploy-alienware.sh", "--check"]
                             for c in self.manifest["smoke_checks"]))
 

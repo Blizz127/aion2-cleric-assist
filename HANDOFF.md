@@ -4,6 +4,20 @@
 off Claude Opus to Codex GPT-6-Astra. Coordinator task 2e32f40b717b. From this handoff commit on, the Codex lead is
 the only writer. The Claude session `claude-aion2-cleric-assist` (lead from 2026-11-12 14:51Z) stops writing here.
 
+## Codex continuation (2026-11-15): 0.4.0
+- Added offline `ingest fixtures`, `ingest validate` and `ingest demo`. Fixtures are clearly synthetic,
+  use the existing 320x180 demo UI, and never establish owner captures, real binds or Q/E stack semantics.
+- The read-only validator checks labeled full-frame PNGs, dimensions, structure/pixel decoding, input hashes,
+  coverage and an in-memory calibration build. It reports `calibration_buildable` and
+  `evidence_coverage_complete` separately; `owner_evidence_satisfied`, `live_verified` and `input_sent` stay false.
+  Owner-declared sets that pass technical checks get a manual calibration argument array, never execution.
+- README documents the manifest and owner-intake steps. Missing target geometry, semantic evidence review,
+  owner approval and the first live trial remain outstanding. No real frames were supplied or invented.
+- Focused ingest/packaging checks and the private build's ten offline smoke checks cover the new path.
+  No full-suite rerun or live adapters. `BUILD.json` records the source commit; build/delivery/backup details
+  go in `dist/deploy-0.4.0-*.json`. Rollback follows the existing separate-directory/deploy-script procedure.
+  Nothing is pushed; the capture hold stays in force.
+
 ## Codex continuation (2026-11-15): 0.3.7
 - Hardened stdlib PNG pixel decoding after synthetic fixtures showed unsupported filters accepted as raw pixels
   and extra decoded bytes ignored. The reader now rejects these and incomplete/trailing compressed data,
@@ -130,6 +144,8 @@ Steps for the owner, with Aion 2 running:
    gitignored. Frames never go into commits or builds; the build list in `tools/build_private.py` is fixed.
 2. Calibrate:
    - Measure `target` on a targeted frame and add it to `regions.alienware-2560x1600.draft.json`.
+   - Label the selected frames in a manifest using README's 0.4.0 intake format; run `ingest validate`.
+     Technical success does not satisfy owner evidence; review the actual states and sequences first.
    - Run `calibrate`, then `read` on fresh frames.
    - Check the HP reading at each level. Known limit 1: the magenta tip makes HP read low.
    - Check the MP direction; "left" is assumed.

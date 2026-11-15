@@ -158,10 +158,11 @@ region as "no such slot". That is expected: `run` checks only enabled slots agai
 python3 tools/build_private.py --out dist
 ```
 Builds a versioned source archive with per-file and archive SHA-256 checksums and runs startup, combat replay,
-workflow demo and default-refusal smoke checks from an isolated staged copy. The build does not publish or
+workflow demo, synthetic ingest and default-refusal smoke checks from an isolated staged copy. The build does not publish or
 start live adapters. From 0.3.6 the archive includes this README's entry points, `HANDOFF.md` and the executable
 `deploy-alienware.sh`, so deployment can be run from the extracted archive. A ninth smoke check runs the packaged
-deployer's offline `--check` mode and verifies its inventory matches the packaged source entries. Captures,
+deployer's offline `--check` mode and verifies its inventory matches the packaged source entries. From 0.4.0 a
+tenth check generates and validates a temporary synthetic capture bundle while asserting the evidence hold. Captures,
 owner config/profile/approvals, journals, virtual environments and backups at the project root are excluded.
 
 ## Getting it running on the Alienware
@@ -205,6 +206,65 @@ decoded data that does not match the declared dimensions, incomplete or trailing
 pixel formats or palette references. Decompression stops after the expected scanline size plus one byte, enough
 to detect excess output. Supported 8-bit color modes and filters retain their pixel values. Tests use synthetic
 files only; these checks do not establish the outstanding game-state or calibration evidence.
+
+**Offline capture intake (0.4.0).** Exercise the whole intake without the game, portals or saved owner files:
+```
+python3 -m aion2_assist ingest demo
+python3 -m aion2_assist ingest fixtures --out synthetic-fixtures/demo
+python3 -m aion2_assist ingest validate --regions synthetic-fixtures/demo/regions.json \
+  --manifest synthetic-fixtures/demo/manifest.json
+```
+`demo` cleans up its temporary files. `fixtures` refuses an existing destination and writes a `SYNTHETIC.json`
+marker, 13 generated PNGs, demo geometry and a manifest. The demo UI and its fictional Q/E examples are not
+Aion 2 evidence. Keep generated bundles in the ignored `synthetic-fixtures/` directory; they are not packaged.
+The generator refuses destinations inside packaged source directories.
+
+When the owner captures arrive, select full frames and create a separate `manifest.json` in that capture
+directory. These filenames illustrate the format; replace them with actual selected filenames. Put Q/E frames
+in press order through stack exhaustion. All image paths must stay inside that directory (including symlinks).
+```
+{
+  "version": 1,
+  "source": "owner_capture",
+  "shots": {
+    "normal": "enemy-all-ready.png",
+    "cooldown": "all-slots-cooldown.png",
+    "no_target": "no-target.png"
+  },
+  "evidence": {
+    "hp_levels": ["hp-full.png", "hp-half.png", "hp-low.png"],
+    "mp_partial": ["hp-half.png"],
+    "q_stack": ["q-after-1.png", "q-after-2.png"],
+    "e_stack": ["e-after-1.png", "e-after-2.png"]
+  }
+}
+```
+`normal` must show an enemy target, nonempty bars and every configured slot ready; `cooldown` must show every
+configured slot on cooldown together. Add optional `friendly_target` and shots named for configured states
+(for example `dialog`, `loading`, `death`). Missing state shots produce an explicit omission warning. Evidence
+can reuse calibration images. Each evidence list requires distinct files; identical pixels in different Q/E
+frames are allowed because unchanged visuals after a press are meaningful. Three HP, one partial-MP, and two
+images per Q/E sequence are minimum coverage only, not proof of the labeled states or stack exhaustion.
+
+After measuring the real target rectangle, validate against the real draft geometry:
+```
+python3 -m aion2_assist ingest validate --regions regions.alienware-2560x1600.draft.json \
+  --manifest shots/OWNER-CAPTURE-DIRECTORY/manifest.json
+```
+The draft's unset target is still a blocker. The validator checks all selected PNG chunk checksums, stdlib
+pixel decoding and exact frame dimensions, hashes inputs, and builds a profile in memory. It writes no
+profile, config or approval and sends no input. Limits are 128 selected PNGs, 128 MiB per PNG, 16,777,216 pixels
+per full frame, and 1 MiB per JSON input. PNGs must be 8-bit and non-interlaced; other formats are reported as
+unsupported. Validate completed, stable capture files; files changing during validation are refused.
+
+The JSON report separates `calibration_buildable` from `evidence_coverage_complete` (labels/counts/valid files).
+`valid=true` and exit 0 mean technical intake passed; invalid input returns exit 2. `source` is a declaration,
+not authenticated provenance. Known synthetic markers cannot be relabeled as owner captures, but an absent
+marker does not establish authenticity. **`owner_evidence_satisfied`, `live_verified` and `input_sent` always
+remain false.** A technically valid owner-declared set includes `calibrate_argv` as an argument array for
+manual use, with a new output-path placeholder; it is never executed. Review the game-state labels, hashes,
+HP/MP readings, Q/E behavior and fresh frames before owner approval or any live trial. Real captures remain
+outstanding; do not substitute the generated demo geometry for the owner's draft.
 
 ## Architecture
 ```
