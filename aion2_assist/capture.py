@@ -19,6 +19,7 @@ import signal
 import struct
 import subprocess
 import time
+import zlib
 
 from .portal import PORTAL, PORTAL_PATH, SESSION_IFACE, PortalDenied
 
@@ -36,12 +37,40 @@ def gst_capture_argv(node_id, fd, every_s, pattern):
 
 
 def png_size(path):
-    """(width, height) from a PNG's IHDR, or None if the file is not a complete PNG header yet."""
+    """Size of a complete PNG chunk stream, or None for truncated/corrupt structure.
+
+    Check framing and CRCs with bounded reads; do not decode pixels or assess screenshot contents.
+    """
     with open(path, "rb") as f:
-        head = f.read(24)
-    if len(head) < 24 or head[:8] != b"\x89PNG\r\n\x1a\n" or head[12:16] != b"IHDR":
-        return None
-    return struct.unpack(">II", head[16:24])
+        head = f.read(33)
+        if (len(head) != 33 or head[:8] != b"\x89PNG\r\n\x1a\n" or head[8:16] != b"\0\0\0\rIHDR"
+                or zlib.crc32(head[12:29]) != struct.unpack(">I", head[29:33])[0]):
+            return None
+        size = struct.unpack(">II", head[16:24])
+        if not all(size):
+            return None
+        has_image_data = False
+        while True:
+            header = f.read(8)
+            if len(header) != 8:
+                return None
+            length, kind = struct.unpack(">I4s", header)
+            if kind == b"IHDR" or (kind == b"IEND" and length != 0):
+                return None
+            crc, remaining = zlib.crc32(kind), length
+            while remaining:
+                data = f.read(min(remaining, 65536))
+                if not data:
+                    return None
+                crc = zlib.crc32(data, crc)
+                remaining -= len(data)
+            checksum = f.read(4)
+            if len(checksum) != 4 or struct.unpack(">I", checksum)[0] != crc:
+                return None
+            if kind == b"IDAT" and length:
+                has_image_data = True
+            if kind == b"IEND":
+                return size if has_image_data and not f.read(1) else None
 
 
 def _frames(folder):
@@ -103,7 +132,7 @@ def run_capture(out_dir, every_s, seconds, *, transport_factory, spawn=subproces
             if t >= deadline:
                 break
             if t >= next_note:
-                emit(f"capture: {len(_frames(folder))} frames so far")
+                emit(f"capture: {len(_frames(folder))} frame files so far (completion checked on stop)")
                 next_note = t + 10.0
             sleep(min(0.5, max(0.0, deadline - t)))
     except PortalDenied as e:
@@ -144,13 +173,26 @@ def run_capture(out_dir, every_s, seconds, *, transport_factory, spawn=subproces
         code = code or 4
         reason += "; " + "; ".join(cleanup_errors)
     frames = _frames(folder)
-    sizes = {png_size(os.path.join(folder, n)) for n in frames}
-    sizes.discard(None)
-    if code == 0 and not frames:
+    sizes, invalid_frames = set(), {}
+    for name in frames:
+        try:
+            size = png_size(os.path.join(folder, name))
+            if size is None:
+                invalid_frames[name] = "incomplete or corrupt PNG structure"
+            else:
+                sizes.add(size)
+        except OSError as e:
+            invalid_frames[name] = str(e)
+    complete_frames = len(frames) - len(invalid_frames)
+    if invalid_frames:
+        code = code or 4
+        reason += f"; {len(invalid_frames)} invalid PNG file(s); see invalid_frames"
+    if code == 0 and not complete_frames:
         code = 4
     if not os.listdir(folder):
         os.rmdir(folder)  # nothing was started; a GStreamer log, if any, is kept for diagnosis
-    emit(json.dumps({"event": "capture_summary", "folder": folder, "frames": len(frames),
+    emit(json.dumps({"event": "capture_summary", "folder": folder, "frames": complete_frames,
+                     "frame_files": len(frames), "invalid_frames": invalid_frames,
                      "frame_size": sorted(sizes)[0] if len(sizes) == 1 else sorted(sizes),
                      "seconds": round(clock() - started, 1), "every_s": every_s, "reason": reason,
                      "input_sent": False}, default=list))

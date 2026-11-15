@@ -3,9 +3,12 @@ an input device, or the network."""
 import datetime
 import json
 import os
+from pathlib import Path
 import subprocess
+import struct
 import tempfile
 import unittest
+import zlib
 from unittest.mock import patch
 
 from aion2_assist import capture
@@ -49,13 +52,15 @@ class FakeProc:
 
 
 class Harness:
-    def __init__(self, frames=2, exit_code=None, transport=None, close_session=False, interrupt=False):
+    def __init__(self, frames=2, exit_code=None, transport=None, close_session=False, interrupt=False,
+                 frame_transform=None):
         self.t = [0.0]
         self.frames, self.exit_code, self.close_session, self.interrupt = frames, exit_code, close_session, interrupt
         self.transport = transport if transport is not None else portal()
         self.factory_calls = 0
         self.spawned = []
         self.msgs = []
+        self.frame_transform = frame_transform
 
     def clock(self):
         return self.t[0]
@@ -73,6 +78,9 @@ class Harness:
         pattern = next(a for a in argv if a.startswith("location="))[len("location="):]
         for i in range(self.frames):
             write_png(pattern % i, Frame(8, 4, [bytes(24)] * 4, 0.0))
+            if self.frame_transform:
+                path = Path(pattern % i)
+                path.write_bytes(self.frame_transform(i, path.read_bytes()))
         proc = FakeProc(self.exit_code)
         self.spawned.append((argv, kw, proc))
         if self.close_session:
@@ -238,6 +246,71 @@ class Capture(unittest.TestCase):
         self.assertEqual(h.summary()["reason"], "stopped by the owner")
         self.assertTrue(h.spawned[0][2].terminated)
         self.assertEqual(h.transport.methods()[-1], "Close")
+
+    def test_truncated_frame_is_preserved_but_not_counted_as_complete(self):
+        for cut in (0, 24, 33, -12, -1):
+            with self.subTest(cut=cut):
+                out = os.path.join(self.out, str(cut))
+                h = Harness(frames=1, frame_transform=lambda i, data: data[:cut])
+                self.assertEqual(h.run(out), 4)
+                s = h.summary()
+                self.assertEqual((s["frames"], s["frame_files"], s["frame_size"]), (0, 1, []))
+                self.assertEqual(list(s["invalid_frames"]), ["frame-00000.png"])
+                self.assertTrue(Path(out, STAMP, "frame-00000.png").exists())
+                self.assertTrue(h.transport.transport_closed)
+
+    def test_mixed_complete_and_truncated_frames_report_separate_counts(self):
+        h = Harness(frame_transform=lambda i, data: data if i == 0 else data[:-1])
+        self.assertEqual(h.run(self.out), 4)
+        s = h.summary()
+        self.assertEqual((s["frames"], s["frame_files"], s["frame_size"]), (1, 2, [8, 4]))
+        self.assertEqual(list(s["invalid_frames"]), ["frame-00001.png"])
+        self.assertIn("invalid PNG", s["reason"])
+        self.assertTrue(Path(self.folder, "frame-00000.png").exists())
+        self.assertTrue(Path(self.folder, "frame-00001.png").exists())
+
+    def test_unreadable_frame_reports_failure_without_losing_summary(self):
+        h = Harness(frames=1)
+        with patch.object(capture, "png_size", side_effect=PermissionError("frame unreadable")):
+            self.assertEqual(h.run(self.out), 4)
+        s = h.summary()
+        self.assertEqual((s["frames"], s["frame_files"]), (0, 1))
+        self.assertIn("frame unreadable", s["invalid_frames"]["frame-00000.png"])
+        self.assertTrue(h.transport.transport_closed)
+
+    def test_png_size_rejects_incomplete_or_corrupt_chunks(self):
+        path = Path(self.out, "sample.png")
+        write_png(path, Frame(8, 4, [bytes(24)] * 4, 0.0))
+        data = path.read_bytes()
+        self.assertEqual(capture.png_size(path), (8, 4))
+        for cut in range(len(data)):
+            with self.subTest(cut=cut):
+                path.write_bytes(data[:cut])
+                self.assertIsNone(capture.png_size(path))
+        for name, damaged in {
+            "no image data": data[:33] + data[-12:],
+            "bad IHDR checksum": data[:29] + bytes([data[29] ^ 1]) + data[30:],
+            "bad IDAT checksum": data[:-13] + bytes([data[-13] ^ 1]) + data[-12:],
+            "trailing data": data + b"extra",
+        }.items():
+            with self.subTest(name=name):
+                path.write_bytes(damaged)
+                self.assertIsNone(capture.png_size(path))
+
+    def test_complete_png_accepts_multiple_data_chunks_and_large_metadata(self):
+        path = Path(self.out, "sample.png")
+        write_png(path, Frame(8, 4, [bytes(24)] * 4, 0.0))
+        data = path.read_bytes()
+        length = struct.unpack(">I", data[33:37])[0]
+        pixels = data[41:41 + length]
+
+        def chunk(kind, body):
+            return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body))
+
+        middle = len(pixels) // 2
+        path.write_bytes(data[:33] + chunk(b"tEXt", b"Comment\0" + b"x" * 65536)
+                         + chunk(b"IDAT", pixels[:middle]) + chunk(b"IDAT", pixels[middle:]) + data[-12:])
+        self.assertEqual(capture.png_size(path), (8, 4))
 
     def test_frame_rate_fraction(self):
         rate = lambda every: next(a for a in capture.gst_capture_argv(1, 3, every, "x") if "framerate" in a)

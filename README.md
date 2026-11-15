@@ -1,4 +1,4 @@
-# aion2-cleric-assist 0.3.3 (live behavior unverified)
+# aion2-cleric-assist 0.3.4 (live behavior unverified)
 
 > **Lane owner from the 2026-11-15 handoff:** the Codex GPT-6-Astra lead, by the owner's order of 07:01–07:03Z
 > (coordinator task 2e32f40b717b). Start with `HANDOFF.md`. Before that, Claude session `claude-aion2-cleric-assist`
@@ -189,6 +189,13 @@ the saved PNGs and diagnostic log are kept. Errors stopping GStreamer still allo
 to be attempted. Cleanup failures are included in the summary and return failure; portal denial keeps exit 3.
 These cases are tested with fake processes and portals only. This does not verify frame contents or satisfy the
 outstanding owner capture requirement.
+
+**Complete capture files (0.3.4).** On stop, capture checks PNG chunk boundaries and checksums through the final
+`IEND`, using bounded reads without decoding pixels. The summary's `frames` counts only files passing those
+checks; `frame_files` counts all matching files, and `invalid_frames` lists rejected filenames and reasons.
+Any incomplete, corrupt or unreadable file makes capture return exit 4, even if other frames completed.
+Every file is kept for diagnosis. These checks do not establish that compressed pixels decode correctly or that
+the screenshots show the game states required for calibration; owner evidence is still outstanding.
 
 ## Architecture
 ```

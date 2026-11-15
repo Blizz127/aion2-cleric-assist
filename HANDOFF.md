@@ -4,6 +4,15 @@
 off Claude Opus to Codex GPT-6-Astra. Coordinator task 2e32f40b717b. From this handoff commit on, the Codex lead is
 the only writer. The Claude session `claude-aion2-cleric-assist` (lead from 2026-11-12 14:51Z) stops writing here.
 
+## Codex continuation (2026-11-15): 0.3.4
+- Fixed another offline-reproduced capture bug: empty or truncated PNGs previously counted as successful frames.
+  Capture now checks PNG chunk structure and CRCs through `IEND`, without decoding pixels.
+- Summary `frames` counts structurally complete files, `frame_files` counts all matching files, and
+  `invalid_frames` lists rejected filenames/reasons. Incomplete, corrupt or unreadable files cause exit 4;
+  every file is preserved. This does not validate pixel decoding or satisfy calibration evidence.
+- Focused validation uses `python3 -m unittest tests.test_capture`, with fake portals/processes and synthetic
+  PNG files only. The owner capture hold and `live_verified=false` remain in force. Nothing was pushed.
+
 ## Codex continuation (2026-11-15): 0.3.3
 - Fixed offline-reproduced capture error handling: a failed GStreamer process now returns failure even after
   saving frames. Errors stopping the process no longer skip screen-share/bus cleanup or the capture summary.
