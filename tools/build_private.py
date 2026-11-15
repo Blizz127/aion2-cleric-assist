@@ -16,9 +16,28 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from aion2_assist import __version__
 
+SOURCE_DIRS = ("aion2_assist", "kwin_script", "tests", "tools")
+SOURCE_FILES = ("README.md", "HANDOFF.md", "deploy-alienware.sh", "requirements.txt", "config.example.json",
+                "regions.example.json", "config.alienware-draft.json", "regions.alienware-2560x1600.draft.json")
+
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def check_deployment_inventory(stage, env):
+    argv = ["sh", "./deploy-alienware.sh", "--check"]
+    result = subprocess.run(argv, cwd=stage, env=env, capture_output=True, text=True, timeout=10)
+    if result.returncode:
+        raise RuntimeError(f"deployment inventory check: exit {result.returncode}\n{result.stdout}\n{result.stderr}")
+    declared = result.stdout.splitlines()
+    expected = set(SOURCE_DIRS + SOURCE_FILES)
+    if len(declared) != len(expected) or set(declared) != expected:
+        raise RuntimeError("deployment inventory differs from packaged source entries")
+    missing = [name for name in declared if not (stage / name).exists()]
+    if missing:
+        raise RuntimeError(f"deployment inventory references missing packaged files: {missing}")
+    return dict(argv=argv, exit_code=result.returncode, files=declared)
 
 
 def main():
@@ -32,17 +51,16 @@ def main():
     with tempfile.TemporaryDirectory(prefix="aion2-build-") as temporary:
         stage = Path(temporary) / name
         stage.mkdir()
-        for item in ("aion2_assist", "kwin_script", "tests", "tools"):
+        for item in SOURCE_DIRS:
             shutil.copytree(ROOT / item, stage / item, ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.bak*"))
-        for item in ("README.md", "requirements.txt", "config.example.json", "regions.example.json",
-                     "config.alienware-draft.json", "regions.alienware-2560x1600.draft.json"):
+        for item in SOURCE_FILES:
             shutil.copy2(ROOT / item, stage / item)
         # Compile without generating caches or touching source files.
         for path in stage.rglob("*.py"):
             compile(path.read_text(), str(path.relative_to(stage)), "exec")
         env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
         env.pop("PYTHONPATH", None)
-        checks = []
+        checks = [check_deployment_inventory(stage, env)]  # --check never contacts the target
         for argv, expected in ((["--help"], 0), (["replay", "--demo", "--json"], 0),
                                (["workflow", "demo"], 0), (["doctor"], 0), (["capture", "--help"], 0),
                                (["capture", "--every", "0"], 2),

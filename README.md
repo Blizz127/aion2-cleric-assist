@@ -1,4 +1,4 @@
-# aion2-cleric-assist 0.3.5 (live behavior unverified)
+# aion2-cleric-assist 0.3.6 (live behavior unverified)
 
 > **Lane owner from the 2026-11-15 handoff:** the Codex GPT-6-Astra lead, by the owner's order of 07:01–07:03Z
 > (coordinator task 2e32f40b717b). Start with `HANDOFF.md`. Before that, Claude session `claude-aion2-cleric-assist`
@@ -159,7 +159,10 @@ python3 tools/build_private.py --out dist
 ```
 Builds a versioned source archive with per-file and archive SHA-256 checksums and runs startup, combat replay,
 workflow demo and default-refusal smoke checks from an isolated staged copy. The build does not publish or
-start live adapters.
+start live adapters. From 0.3.6 the archive includes this README's entry points, `HANDOFF.md` and the executable
+`deploy-alienware.sh`, so deployment can be run from the extracted archive. A ninth smoke check runs the packaged
+deployer's offline `--check` mode and verifies its inventory matches the packaged source entries. Captures,
+owner config/profile/approvals, journals, virtual environments and backups at the project root are excluded.
 
 ## Getting it running on the Alienware
 Delivery goes to the owner's PC, where the game runs: `./deploy-alienware.sh` copies only this project's

@@ -4,6 +4,19 @@
 off Claude Opus to Codex GPT-6-Astra. Coordinator task 2e32f40b717b. From this handoff commit on, the Codex lead is
 the only writer. The Claude session `claude-aion2-cleric-assist` (lead from 2026-11-12 14:51Z) stops writing here.
 
+## Codex continuation (2026-11-15): 0.3.6
+- Fixed an offline-confirmed packaging omission: private archives and source deployments now include
+  `HANDOFF.md` and executable `deploy-alienware.sh`, both referenced by the README.
+- The build now runs nine smoke checks, including the packaged deployer's network-free `--check` mode. Its
+  declared inventory must match the fixed package entries and every listed path must exist.
+- Three focused packaging regressions pass: standalone extracted-archive entry points, manifest hashes/private
+  root-file exclusion, and rejection of missing or unexpected deployment entries. Fixture markers are synthetic,
+  never owner captures or configuration. No full-suite rerun is required for this packaging-only patch.
+- The archive's `BUILD.json` records its exact source commit. Devbox build/deployment receipts are in `dist/`;
+  use `deploy-0.3.6-*.json` for its target backup and delivery details. Rollback uses the existing deploy script
+  from a separate directory containing the pre-deployment source backup (as described under 0.3.3 below).
+- The owner capture requirement remains unsatisfied, `live_verified=false`, and nothing was pushed.
+
 ## Codex continuation (2026-11-15): 0.3.5
 - Fixed offline-reproduced PipeWire reader shutdown defects: helpers are now waited/reaped, killed after a
   termination timeout, and their reader threads joined before buffered stdout is closed. Waits are bounded.
