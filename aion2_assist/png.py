@@ -12,6 +12,8 @@ def _paeth(a, b, c):
 
 
 def unfilter(ftype: int, line: bytearray, prev: bytearray, bpp: int) -> bytearray:
+    if ftype not in (0, 1, 2, 3, 4):
+        raise ValueError(f"unsupported PNG scanline filter: {ftype}")
     for i in range(len(line)):
         a = line[i - bpp] if i >= bpp else 0
         b = prev[i]
@@ -31,22 +33,42 @@ def read_png_rows(data: bytes):
     """Return (width, height, rows of RGB bytes)."""
     if data[:8] != b"\x89PNG\r\n\x1a\n":
         raise ValueError("not a PNG")
-    pos, idat, plte = 8, b"", None
+    pos, idat, plte, header = 8, b"", None, None
     while pos < len(data):
         ln, ctype = struct.unpack(">I4s", data[pos:pos + 8])
         body = data[pos + 8:pos + 8 + ln]
         pos += 12 + ln
         if ctype == b"IHDR":
-            w, h, depth, ctp, _, _, interlace = struct.unpack(">IIBBBBB", body)
+            header = struct.unpack(">IIBBBBB", body)
         elif ctype == b"PLTE":
             plte = body
         elif ctype == b"IDAT":
             idat += body
+    if header is None:
+        raise ValueError("missing PNG image header")
+    w, h, depth, ctp, compression, filtering, interlace = header
+    if not w or not h:
+        raise ValueError("PNG dimensions must be positive")
     if depth != 8 or interlace != 0:
         raise ValueError("only 8-bit non-interlaced PNG supported without PIL")
-    chans = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}[ctp]
+    if compression != 0 or filtering != 0:
+        raise ValueError("unsupported PNG compression or filter method")
+    chans = {0: 1, 2: 3, 3: 1, 4: 2, 6: 4}.get(ctp)
+    if chans is None:
+        raise ValueError(f"unsupported PNG color type: {ctp}")
+    if ctp == 3 and (not plte or len(plte) % 3 or len(plte) > 768):
+        raise ValueError("invalid PNG palette")
     stride = w * chans
-    raw = zlib.decompress(idat)
+    expected = h * (stride + 1)
+    decoder = zlib.decompressobj()
+    try:
+        raw = decoder.decompress(idat, expected + 1)  # one extra byte detects oversized scanlines
+    except zlib.error as e:
+        raise ValueError(f"invalid PNG compressed image data: {e}") from e
+    if len(raw) != expected:
+        raise ValueError("PNG scanline data length does not match dimensions")
+    if not decoder.eof or decoder.unused_data or decoder.unconsumed_tail:
+        raise ValueError("incomplete or trailing PNG compressed image data")
     rows, prev = [], bytearray(stride)
     for y in range(h):
         off = y * (stride + 1)
@@ -60,6 +82,8 @@ def read_png_rows(data: bytes):
             elif ctp == 0 or ctp == 4:
                 rgb = bytes((px[0],) * 3)
             else:
+                if px[0] >= len(plte) // 3:
+                    raise ValueError("PNG palette index out of range")
                 rgb = plte[3 * px[0]:3 * px[0] + 3]
             out[3 * x:3 * x + 3] = rgb
         rows.append(bytes(out))

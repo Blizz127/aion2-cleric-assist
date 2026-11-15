@@ -4,6 +4,18 @@
 off Claude Opus to Codex GPT-6-Astra. Coordinator task 2e32f40b717b. From this handoff commit on, the Codex lead is
 the only writer. The Claude session `claude-aion2-cleric-assist` (lead from 2026-11-12 14:51Z) stops writing here.
 
+## Codex continuation (2026-11-15): 0.3.7
+- Hardened stdlib PNG pixel decoding after synthetic fixtures showed unsupported filters accepted as raw pixels
+  and extra decoded bytes ignored. The reader now rejects these and incomplete/trailing compressed data,
+  invalid dimensions/formats, and invalid indexed palettes/references with `ValueError`.
+- Decompression is limited to the declared scanline size plus one byte; the five supported 8-bit color modes and
+  filters preserve their existing RGB values. This does not replace capture completeness or game-state checks.
+- All 15 focused decoder/PNG-round-trip/synthetic-calibration checks pass locally. No full-suite rerun; no owner
+  screenshots, real calibration, approval, portal consent or game-input trial. The capture hold and
+  `live_verified=false` remain in force, and nothing was pushed.
+- `BUILD.json` records the source commit; build/delivery/backup details go in `dist/deploy-0.3.7-*.json`.
+  Rollback follows the existing separate-directory/deploy-script procedure documented below.
+
 ## Codex continuation (2026-11-15): 0.3.6
 - Fixed an offline-confirmed packaging omission: private archives and source deployments now include
   `HANDOFF.md` and executable `deploy-alienware.sh`, both referenced by the README.

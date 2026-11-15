@@ -1,4 +1,4 @@
-# aion2-cleric-assist 0.3.6 (live behavior unverified)
+# aion2-cleric-assist 0.3.7 (live behavior unverified)
 
 > **Lane owner from the 2026-11-15 handoff:** the Codex GPT-6-Astra lead, by the owner's order of 07:01–07:03Z
 > (coordinator task 2e32f40b717b). Start with `HANDOFF.md`. Before that, Claude session `claude-aion2-cleric-assist`
@@ -199,6 +199,12 @@ checks; `frame_files` counts all matching files, and `invalid_frames` lists reje
 Any incomplete, corrupt or unreadable file makes capture return exit 4, even if other frames completed.
 Every file is kept for diagnosis. These checks do not establish that compressed pixels decode correctly or that
 the screenshots show the game states required for calibration; owner evidence is still outstanding.
+
+**Stdlib PNG decoding (0.3.7).** The fallback reader used without Pillow rejects unsupported scanline filters,
+decoded data that does not match the declared dimensions, incomplete or trailing compressed streams, and invalid
+pixel formats or palette references. Decompression stops after the expected scanline size plus one byte, enough
+to detect excess output. Supported 8-bit color modes and filters retain their pixel values. Tests use synthetic
+files only; these checks do not establish the outstanding game-state or calibration evidence.
 
 ## Architecture
 ```
