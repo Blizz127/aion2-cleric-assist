@@ -9,6 +9,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest.mock import patch
 
 from aion2_assist import gates as G
 from aion2_assist.orchestrator import Factories, Orchestrator, StartupRefused, Watchdog, live_main
@@ -192,6 +193,15 @@ class Teardown(unittest.TestCase):
         r.t.calls.clear()
         r.o.teardown()
         self.assertEqual(r.t.calls, [])
+
+    def test_reader_shutdown_failure_does_not_skip_remaining_teardown(self):
+        r = Rig()
+        with patch.object(FakeReader, "close", side_effect=RuntimeError("pipewire cleanup failed")):
+            r.o.run(max_ticks=1, install_signals=False)
+        self.assertEqual(r.o.teardown_errors, [("reader.close", "RuntimeError")])
+        self.assertEqual(sorted(r.closes()), sorted([RD, CAST, GS]))
+        self.assertTrue(r.t.transport_closed)
+        self.assertFalse(r.monitors[0].thread.is_alive())
 
     def test_startup_failure_midway_cleans_up_what_was_opened(self):
         t = make_transport({("org.freedesktop.portal.RemoteDesktop", "Start"): {"devices": 3}})  # asks beyond keyboard

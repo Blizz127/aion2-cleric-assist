@@ -31,6 +31,8 @@ class GStreamerPipeWireReader(PipeWireReader):
         self.latest = None
         self.error = None
         self._lock = threading.Lock()
+        self._closed = False
+        self._thread = None
 
     def _start(self, node_id, fd, size):
         raw = fd.fileno() if hasattr(fd, "fileno") else int(fd)
@@ -38,13 +40,17 @@ class GStreamerPipeWireReader(PipeWireReader):
         self.proc = self.spawn(gst_argv(node_id, raw, size), stdout=subprocess.PIPE, stdin=subprocess.DEVNULL,
                                stderr=subprocess.DEVNULL, pass_fds=(raw,))
         if self.start_thread:
-            threading.Thread(target=self._read_loop, daemon=True).start()
+            self._thread = threading.Thread(target=self._read_loop, name="pipewire-reader", daemon=True)
+            self._thread.start()
 
     def _read_loop(self):
         w, h = self.size
         n, out = 3 * w * h, self.proc.stdout
         try:
             while True:
+                with self._lock:
+                    if self._closed:
+                        return
                 buf = b""
                 while len(buf) < n:
                     chunk = out.read(n - len(buf))
@@ -53,21 +59,61 @@ class GStreamerPipeWireReader(PipeWireReader):
                     buf += chunk
                 frame = Frame(w, h, [buf[y * 3 * w:(y + 1) * 3 * w] for y in range(h)], self.clock())
                 with self._lock:
+                    if self._closed:
+                        return
                     self.latest = frame  # always keep only the newest frame
         except Exception as e:
-            self.error = e
+            with self._lock:
+                if not self._closed:
+                    self.error = e
 
     def read(self, node_id, fd, size) -> Frame:
-        if self.proc is None:
-            self._start(node_id, fd, size)
-        if self.error:
-            raise RuntimeError(f"pipewire capture failed: {self.error}")
         with self._lock:
+            if self._closed:
+                raise RuntimeError("pipewire reader is closed")
+            if self.proc is None:
+                self._start(node_id, fd, size)
+            if self.error:
+                raise RuntimeError(f"pipewire capture failed: {self.error}")
             f = self.latest
         if f is None:
             raise RuntimeError("no frame received yet")
         return f
 
     def close(self):
-        if self.proc:
-            self.proc.terminate()
+        """Stop and reap the helper with bounded waits; closed readers cannot restart.
+
+        Do not close buffered stdout while the reader may hold its I/O lock. Report a stuck reader instead,
+        so the orchestrator can continue closing the portal sessions and bus.
+        """
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+            self.latest = None
+            proc, reader = self.proc, self._thread
+        errors = []
+        if proc is not None:
+            try:
+                if proc.poll() is None:
+                    proc.terminate()
+                proc.wait(timeout=1.0)
+            except Exception as e:
+                if not isinstance(e, subprocess.TimeoutExpired):
+                    errors.append(f"terminate/wait: {e}")
+                try:
+                    proc.kill()
+                    proc.wait(timeout=1.0)
+                except Exception as e:
+                    errors.append(f"kill/wait: {e}")
+        if reader is not None and reader.is_alive():
+            reader.join(timeout=1.0)
+        if reader is not None and reader.is_alive():
+            errors.append("reader thread did not stop")
+        elif proc is not None and proc.stdout is not None:
+            try:
+                proc.stdout.close()
+            except Exception as e:
+                errors.append(f"stdout close: {e}")
+        if errors:
+            raise RuntimeError("pipewire cleanup failed: " + "; ".join(errors))

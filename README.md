@@ -1,4 +1,4 @@
-# aion2-cleric-assist 0.3.4 (live behavior unverified)
+# aion2-cleric-assist 0.3.5 (live behavior unverified)
 
 > **Lane owner from the 2026-11-15 handoff:** the Codex GPT-6-Astra lead, by the owner's order of 07:01–07:03Z
 > (coordinator task 2e32f40b717b). Start with `HANDOFF.md`. Before that, Claude session `claude-aion2-cleric-assist`
@@ -281,6 +281,13 @@ test module is skipped. No global/--user installs.
   BindShortcuts (toggle/emergency/hold; triggers are only *preferred*, the user confirms in the portal UI),
   Activated/Deactivated signals.
 - `run` selects these adapters only after static live gates pass; all automated verification uses fakes.
+
+**Reader shutdown (0.3.5).** Closing the PipeWire reader clears its cached frame and permanently refuses new
+reads. It waits for the GStreamer helper, escalates to kill if needed, and joins the reader thread before closing
+buffered stdout; each wait is bounded to one second. A stuck thread is reported without attempting a potentially
+blocking pipe close. The orchestrator records cleanup errors and continues closing its other resources.
+Focused tests use fake processes plus a harmless local Python pipe writer that ignores termination, never real
+screen capture, portal consent, or game input. Live behavior remains unverified.
 
 ## Focus (KWin) - corrected design
 Earlier draft assumed D-Bus `loadScript`/`run`/`unloadScript` on `/Scripting`; those are NOT in the KWin docs

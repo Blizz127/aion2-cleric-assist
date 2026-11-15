@@ -4,6 +4,15 @@
 off Claude Opus to Codex GPT-6-Astra. Coordinator task 2e32f40b717b. From this handoff commit on, the Codex lead is
 the only writer. The Claude session `claude-aion2-cleric-assist` (lead from 2026-11-12 14:51Z) stops writing here.
 
+## Codex continuation (2026-11-15): 0.3.5
+- Fixed offline-reproduced PipeWire reader shutdown defects: helpers are now waited/reaped, killed after a
+  termination timeout, and their reader threads joined before buffered stdout is closed. Waits are bounded.
+- Closing is idempotent, discards cached frames, prevents new starts/reads, and prevents a frame already being
+  processed from publishing after closure. A stuck reader is reported so orchestrator cleanup can continue.
+- Focused checks cover the reader and orchestrator teardown using fakes and a harmless local Python child,
+  including ignored termination. No real GStreamer/portal/game-input trial was performed; owner captures and
+  approval remain pending, `live_verified=false`, and nothing was pushed.
+
 ## Codex continuation (2026-11-15): 0.3.4
 - Fixed another offline-reproduced capture bug: empty or truncated PNGs previously counted as successful frames.
   Capture now checks PNG chunk structure and CRCs through `IEND`, without decoding pixels.
