@@ -1,10 +1,11 @@
 # aion2-cleric-assist 0.3.2 (live behavior unverified)
 
-> **Lane owner since 2026-11-12 14:51Z:** Claude session `claude-aion2-cleric-assist`. The owner reassigned the
-> lane in that session's terminal ("take it from the other repo please" / "and lets get it up and running to finish
-> the goal"). At 22:49Z the same day, at the owner's request, the Codex session for task 6b52dbf3ae9f was closed and
-> the task marked cancelled (coordinator board: cancelled 2026-11-12T22:49:35Z). No other lane should write here
-> unless the owner hands the lane over.
+> **Lane owner from the 2026-11-15 handoff:** the Codex GPT-6-Astra lead, by the owner's order of 07:01–07:03Z
+> (coordinator task 2e32f40b717b). Start with `HANDOFF.md`. Before that, Claude session `claude-aion2-cleric-assist`
+> was the writer from 2026-11-12 14:51Z, when the owner typed "take it from the other repo please" / "and lets get it
+> up and running to finish the goal" in its terminal. Before Claude, the writer was Codex task 6b52dbf3ae9f, closed
+> at the owner's request and cancelled at 2026-11-12T22:49:35Z. Only one lane writes at a time, and only an owner
+> order moves the lane.
 
 Combat assistance and calibrated visual workflows for an Aion 2 Cleric on Bazzite/KDE Wayland
 (Steam appid 3393110, Proton). The full-game autonomy goal is **not complete**: the seven-stage
