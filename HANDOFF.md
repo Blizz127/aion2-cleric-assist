@@ -12,6 +12,17 @@ the only writer. The Claude session `claude-aion2-cleric-assist` (lead from 2026
 - Focused checks cover the reader and orchestrator teardown using fakes and a harmless local Python child,
   including ignored termination. No real GStreamer/portal/game-input trial was performed; owner captures and
   approval remain pending, `live_verified=false`, and nothing was pushed.
+- Source commit `3cafe12`; all 22 focused reader/full-flow/teardown tests pass locally and on Alienware
+  Python 3.14.8. The full suite was not repeated. Private artifact:
+  `dist/aion2-assist-0.3.5-20261115T141534784735Z.tar.gz`, sha256
+  `85143de4dd943ed9a1437ccbcd28d5adea70d003cd0812550e78a28fc31dfe33`; all eight build smoke checks passed.
+- Deployed via `./deploy-alienware.sh` at 14:15:53Z after idle-process check and backup. All 55 packaged source
+  hashes matched, draft config validation passed, and protected files were unchanged. Target `shots/` is absent.
+  Receipt: `dist/deploy-0.3.5-20261115T141553Z.json`.
+- Pre-deployment source backup on Alienware:
+  `~/.local/share/aion2-assist/backups/pre-0.3.5-20261115T141549133750Z.tar.gz`, sha256
+  `d279d5d6e502a8e0a75d98b1a7158aa217fd5bb0f0a50eaf411a1dcc07631196`.
+  Rollback uses the separate-directory/existing-deploy-script procedure recorded under 0.3.3 below.
 
 ## Codex continuation (2026-11-15): 0.3.4
 - Fixed another offline-reproduced capture bug: empty or truncated PNGs previously counted as successful frames.
