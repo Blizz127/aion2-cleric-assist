@@ -3,27 +3,43 @@ import argparse
 import dataclasses
 import json
 import os
+import struct
 import sys
 
 from .config import ConfigError, load_config
 from .perception import Perceiver
 from .png import load_frame
-from .profile import CalibrationError, build_profile, load_profile, save_profile
+from .profile import CalibrationError, ProfileMismatch, build_profile, load_profile, save_profile
 
 
 def cmd_calibrate(a):
-    with open(a.regions) as f:
-        spec = json.load(f)
-    shots = {}
-    for item in a.shot:
-        name, _, path = item.partition("=")
-        shots[name] = load_frame(path)
     try:
+        with open(a.regions) as f:
+            spec = json.load(f)
+        if not isinstance(spec, dict) or not isinstance(spec.get("regions", {}), dict):
+            raise CalibrationError("regions spec and its regions field must be objects")
+        states = spec.get("regions", {}).get("states", {})
+        if not isinstance(states, dict):
+            raise CalibrationError("regions.states must be an object")
+        roles = {"normal", "cooldown", "no_target", "friendly_target"} | set(states)
+        shots = {}
+        for item in a.shot:
+            name, separator, path = item.partition("=")
+            if not separator or not name or not path:
+                raise CalibrationError("--shot must be NAME=PNG with a nonempty label and path")
+            if name not in roles:
+                raise CalibrationError(f"unknown screenshot label {name!r}; use a calibration role or configured state")
+            if name in shots:
+                raise CalibrationError(f"duplicate screenshot label {name!r}")
+            shots[name] = load_frame(path)
         prof = build_profile(spec, shots)
-    except CalibrationError as e:
+        save_profile(prof, a.out)
+    except FileExistsError:
+        print(f"calibration refused: output already exists: {a.out}; choose a new --out path", file=sys.stderr)
+        return 2
+    except (OSError, ValueError, TypeError, KeyError, AttributeError, IndexError, struct.error, ProfileMismatch) as e:
         print(f"calibration refused: {e}", file=sys.stderr)
         return 2
-    save_profile(prof, a.out)
     print(f"profile {a.out} hash={prof.hash} frame={prof.frame_size[0]}x{prof.frame_size[1]}")
     return 0
 
@@ -196,8 +212,8 @@ def main(argv=None):
     c = sub.add_parser("calibrate", help="build a profile from full-frame owner screenshots")
     c.add_argument("--regions", required=True)
     c.add_argument("--shot", action="append", required=True, metavar="NAME=PNG",
-                   help="normal, cooldown, no_target (required); friendly_target, dialog, loading, death (optional)")
-    c.add_argument("--out", required=True)
+                   help="normal, cooldown, no_target (required); friendly_target or configured states (optional)")
+    c.add_argument("--out", required=True, help="new profile path; existing files and symlinks are refused")
     c.set_defaults(fn=cmd_calibrate)
     r = sub.add_parser("read", help="show readings for a screenshot")
     r.add_argument("--profile", required=True)

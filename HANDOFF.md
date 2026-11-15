@@ -4,6 +4,18 @@
 off Claude Opus to Codex GPT-6-Astra. Coordinator task 2e32f40b717b. From this handoff commit on, the Codex lead is
 the only writer. The Claude session `claude-aion2-cleric-assist` (lead from 2026-11-12 14:51Z) stops writing here.
 
+## Codex continuation (2026-11-15): 0.4.2
+- Reproduced and fixed combat calibration silently overwriting an existing output file. Profiles now serialize
+  and flush to a same-directory temporary file, then atomically publish only at a new path. Existing files,
+  directories, symlinks and concurrently claimed destinations are preserved; there is no overwrite fallback.
+- Calibration reports input/output failures cleanly and rejects malformed, duplicate or unknown shot labels;
+  configured custom state labels remain supported. Tests use synthetic files and injected I/O failures only.
+- README documents the new output contract and removes the former overwrite warning from the capture checklist.
+  No owner frames, approval, input, geometry or rotation settings changed; `live_verified=false` remains in force.
+- All 20 focused checks pass locally:
+  `python3 -m unittest tests.test_calibration_output tests.test_perception_calibration.Calibration`.
+  `BUILD.json` records source; delivery/backup/rollback details go in `dist/deploy-0.4.2-*.json`. Nothing is pushed.
+
 ## Codex continuation (2026-11-15): 0.4.1
 - Added labeled synthetic PNG rotation regressions using the unchanged Alienware draft config and a test-only
   mapping of demo pixels to 1/2/Q/E. Expectations check perception first, then the real decider/controller with

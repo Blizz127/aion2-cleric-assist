@@ -2,6 +2,8 @@
 import hashlib
 import json
 import math
+import os
+import tempfile
 from typing import Dict
 
 from .frame import Frame, dist, mean_rgb, mean_vs
@@ -117,8 +119,18 @@ def load_profile(path: str) -> Profile:
 
 
 def save_profile(profile: Profile, path: str):
-    with open(path, "w") as f:
-        json.dump(profile.data, f, indent=1, sort_keys=True)
+    """Publish a complete profile at a new path; never replace existing files or symlinks."""
+    data = json.dumps(profile.data, indent=1, sort_keys=True)
+    # Do not resolve the final component: even a dangling symlink must count as an existing destination.
+    destination = os.path.abspath(path)
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=os.path.dirname(destination),
+                                     prefix=".aion2-profile-", suffix=".tmp") as staged:
+        staged.write(data)
+        staged.flush()
+        os.fsync(staged.fileno())
+        # Same-directory hard linking is atomic and fails if another writer claimed the name first.
+        # There is deliberately no replace/rename fallback that could clobber an existing profile.
+        os.link(staged.name, destination)
 
 
 def _bar_color(frame: Frame, rect, fill="left") -> list:

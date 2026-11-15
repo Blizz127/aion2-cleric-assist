@@ -113,8 +113,11 @@ class Calibration(unittest.TestCase):
             # a wrong-size screenshot is refused by the CLI
             write_png(os.path.join(d, "small.png"), Frame(160, 90, [bytes(480)] * 90, 0.0))
             bad = args[:-2] + ["--shot", f"dialog={os.path.join(d, 'small.png')}"]
-            with contextlib.redirect_stderr(io.StringIO()):
+            bad[4] = os.path.join(d, "bad-size-profile.json")
+            with contextlib.redirect_stderr(io.StringIO()) as err:
                 self.assertEqual(cli.main(bad), 2)
+            self.assertIn("crops are not accepted", err.getvalue())
+            self.assertFalse(os.path.exists(bad[4]))
 
     def test_cli_check_config_rejects_placeholders(self):
         root = os.path.dirname(os.path.dirname(__file__))

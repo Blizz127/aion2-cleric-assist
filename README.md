@@ -295,7 +295,7 @@ offline steps can run on the devbox. The capture requirement is still open.
    `missing_evidence`, `errors` and state-omission warnings. `calibration_buildable` and
    `evidence_coverage_complete` describe technical checks only. Review labels, actual HP/MP values and Q/E
    behavior against the originals before using the suggested `calibrate_argv` manually. Choose a new profile
-   filename: the existing `calibrate` command can overwrite its output, and intake never executes it for you.
+   filename: `calibrate` refuses existing output paths, and intake never executes it for you.
 6. Run `read --profile <new-profile.json> <fresh-frame.png>` on the reserved frames; compare HP/MP, target,
    cooldown and noncombat readings with what is visible. Record unresolved cases and input hashes. Once real
    calibration is accepted, pin its hash in the config. Owner approval, portal consent and the first live trial
@@ -355,6 +355,19 @@ python3 -m aion2_assist calibrate --regions regions.json \
 python3 -m aion2_assist read --profile profile.json fresh_screenshot.png   # verify readings
 python3 -m aion2_assist check-config --config config.json                  # rejects UNSET_* keys
 ```
+
+**Calibration output protection (0.4.2).** `calibrate --out` requires a new filename. Existing profiles,
+directories and symlinks (including dangling links) are refused with exit 2 and remain untouched. Serialization
+and writing finish in a temporary file beside the destination before atomic publication; a competing writer
+that claims the destination first wins. There is no overwrite flag. The filesystem must support same-directory
+hard links; publication failure is reported rather than falling back to replacement. Ordinary failed writes
+leave no partial final profile, and temporary staging files are cleaned up. This does not promise durability
+across power loss or abrupt process termination.
+
+Malformed, duplicate or unknown `--shot NAME=PNG` labels and input/output file errors produce a
+`calibration refused` message and exit 2. Optional shot labels must name `friendly_target` or a state configured
+in the regions file. This protection changes file handling only; owner capture, calibration review and approval
+requirements remain in force.
 
 ## Calibration steps the owner must do
 1. Take FULL-FRAME screenshots (no crops; the profile records the source frame size and refuses other sizes) at
