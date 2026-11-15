@@ -11,6 +11,17 @@ the only writer. The Claude session `claude-aion2-cleric-assist` (lead from 2026
   returns exit 3, and normal owner interruption can still keep the captured frames successfully.
 - Focused check: `python3 -m unittest tests.test_capture` passes all 17 tests, using fake portals/processes only.
   The full suite was not repeated for this patch. Private build receipts are under `dist/`.
+- Source commit: `71d6bd9`. Private artifact: `dist/aion2-assist-0.3.3-20261115T122930166662Z.tar.gz`,
+  sha256 `ea2eedff07a7986b8b615b88d07b0e3881a93e57abb72c3d484e8d42cfcfd211`; all eight build smoke checks passed.
+- Deployed with `./deploy-alienware.sh` to `alienware-bazzite:~/Projects/aion2-cleric-assist` at 12:31:07Z.
+  No Aion/assist processes were found by the final pre-deployment check. All 17 capture tests and draft config
+  validation passed on Python 3.14.8 there; all 55 packaged source files matched their build hashes.
+- Pre-deployment source backup on Alienware:
+  `~/.local/share/aion2-assist/backups/pre-0.3.3-20261115T123103799630Z.tar.gz`,
+  sha256 `a8a1d3ec16332403feb3c876868122c72c36eb15de80b83760d8ce0b3ac83c77`.
+  For rollback, copy/extract that source archive to a separate devbox directory, put `deploy-alienware.sh`
+  from `cc2fdd8` there, and deploy that directory with the script after checking the target is idle.
+  The deployment receipt is `dist/deploy-0.3.3-20261115T123107Z.json`; protected files were unchanged.
 - **The owner capture requirement below remains unsatisfied; `live_verified` is still false.** No live
   capture, calibration, approval or game-input trial was performed for this patch. Nothing was pushed.
 
